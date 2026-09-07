@@ -1,0 +1,105 @@
+{
+  "patient": {
+    "id": "patient-1",
+    "preferred_name": "dear",
+    "caregiver_name": "Priya",
+    "timezone": "local"
+  },
+  "people": [
+    {
+      "id": "person-arun",
+      "name": "Arun",
+      "relationship": "son",
+      "notes": "Visits on weekends. Likes classical music and coffee.",
+      "face_embedding": []
+    },
+    {
+      "id": "person-priya",
+      "name": "Priya",
+      "relationship": "daughter",
+      "notes": "Primary caregiver. Lives nearby.",
+      "face_embedding": []
+    },
+    {
+      "id": "person-kumar",
+      "name": "Dr. Kumar",
+      "relationship": "doctor",
+      "notes": "Neurologist at City Clinic.",
+      "face_embedding": []
+    }
+  ],
+  "important_dates": [
+    {
+      "id": "date-arun-bday",
+      "title": "Arun's birthday",
+      "date_iso": "2026-03-12",
+      "kind": "birthday",
+      "notes": "Your son's birthday"
+    },
+    {
+      "id": "date-wedding",
+      "title": "Wedding anniversary",
+      "date_iso": "2026-11-02",
+      "kind": "anniversary",
+      "notes": ""
+    }
+  ],
+  "preferences": [
+    {
+      "id": "pref-1",
+      "subject": "patient",
+      "key": "food",
+      "value": "rice and dal"
+    },
+    {
+      "id": "pref-2",
+      "subject": "patient",
+      "key": "music",
+      "value": "old film songs"
+    },
+    {
+      "id": "pref-3",
+      "subject": "Arun",
+      "key": "music",
+      "value": "classical music"
+    },
+    {
+      "id": "pref-4",
+      "subject": "Arun",
+      "key": "food",
+      "value": "coffee"
+    }
+  ],
+  "reminders": [
+    {
+      "id": "rem-med-1",
+      "kind": "medication",
+      "title": "Evening medication",
+      "time_iso": "20:00",
+      "frequency": "daily",
+      "status": "pending",
+      "medication_name": "prescribed tablets",
+      "notes": ""
+    },
+    {
+      "id": "rem-breakfast",
+      "kind": "daily_routine",
+      "title": "Breakfast",
+      "time_iso": "08:00",
+      "frequency": "daily",
+      "status": "pending",
+      "medication_name": null,
+      "notes": ""
+    }
+  ],
+  "appointments": [
+    {
+      "id": "apt-1",
+      "doctor": "Dr. Kumar",
+      "date_iso": "2026-09-01",
+      "time_iso": "10:00",
+      "location": "City Clinic",
+      "purpose": "regular check-up"
+    }
+  ]
+}

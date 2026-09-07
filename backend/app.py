@@ -1,0 +1,44 @@
+from datetime import datetime
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from backend.api.router import api_router
+from backend.container import get_container
+
+app = FastAPI(
+    title="Alzheimer Voice Assistant API",
+    description="Local AI assistant for Alzheimer's patients. Flutter is the only UI client.",
+    version="0.1.0",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(api_router)
+
+
+@app.get("/health")
+def health() -> dict:
+    container = get_container()
+    profile = container.repos.patient.get_profile()
+    return {
+        "ok": True,
+        "phase": 1,
+        "patient": profile.preferred_name,
+        "time": datetime.now().isoformat(timespec="seconds"),
+        "stack": {
+            "stt": "Whisper",
+            "nlp": "spaCy",
+            "intent": "DistilBERT",
+            "temporal": "Duckling",
+            "dialogue": "DialogueManager",
+            "llm": "Llama 3 via Ollama",
+            "tts": "Coqui TTS",
+        },
+    }
