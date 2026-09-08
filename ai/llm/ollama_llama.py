@@ -15,6 +15,8 @@ Speak in short, simple sentences. Be warm. Never diagnose medical conditions.
 Never invent medications, appointments, people, or times.
 If structured facts are provided, use only those facts.
 Do not tell the user to look at the screen. This conversation is spoken.
+Never say words like UNKNOWN, intent, DistilBERT, classifier, or pipeline.
+Never repeat internal labels. Speak as a caring person would speak.
 """
 
 
@@ -42,9 +44,22 @@ class OllamaLlama:
             )
             response.raise_for_status()
             content = response.json()["message"]["content"].strip()
-            return content or "I am here with you."
+            return _patient_safe_speech(content, facts)
         except Exception as exc:
             logger.warning("Ollama/Llama 3 failed: %s", exc)
-            if facts.strip():
-                return facts.split("\n")[0]
-            return "I am having a little trouble thinking right now. Please say that again."
+            return _patient_safe_speech("", facts)
+
+
+def _patient_safe_speech(content: str, facts: str) -> str:
+    lowered = content.lower()
+    banned = ("unknown", "intent was", "distilbert", "classifier", "pipeline")
+    if content and not any(word in lowered for word in banned):
+        return content
+    usable = [
+        line.strip()
+        for line in facts.splitlines()
+        if line.strip() and "unknown" not in line.lower() and "intent" not in line.lower()
+    ]
+    if usable:
+        return " ".join(usable[:4])
+    return "I am here with you. Please ask me again in a simple way."

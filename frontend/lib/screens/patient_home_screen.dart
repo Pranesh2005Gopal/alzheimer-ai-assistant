@@ -1,12 +1,12 @@
 import 'dart:io';
 
-import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:record/record.dart';
 
 import '../api/assistant_api.dart';
+import '../audio/speech_player.dart';
 import '../theme/app_colors.dart';
 
 class PatientHomeScreen extends StatefulWidget {
@@ -19,7 +19,7 @@ class PatientHomeScreen extends StatefulWidget {
 class _PatientHomeScreenState extends State<PatientHomeScreen> {
   final AssistantApi _api = AssistantApi();
   final AudioRecorder _recorder = AudioRecorder();
-  final AudioPlayer _player = AudioPlayer();
+  final SpeechPlayer _speaker = SpeechPlayer();
 
   String _status = 'Ready';
   bool _busy = false;
@@ -37,7 +37,7 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
   @override
   void dispose() {
     _recorder.dispose();
-    _player.dispose();
+    _speaker.dispose();
     super.dispose();
   }
 
@@ -72,7 +72,7 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
       }
     }
     final dir = await getTemporaryDirectory();
-    final path = '${dir.path}/patient_turn.wav';
+    final path = '${dir.path}/patient_turn_${DateTime.now().millisecondsSinceEpoch}.wav';
     try {
       await _recorder.start(
         const RecordConfig(encoder: AudioEncoder.wav, numChannels: 1, sampleRate: 16000),
@@ -108,7 +108,16 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
         });
         return;
       }
-      final turn = await _api.sendAudio(File(path));
+      final file = File(path);
+      if (!file.existsSync() || file.lengthSync() < 2000) {
+        setState(() {
+          _busy = false;
+          _status = 'Ready';
+          _lines.add('Assistant: Please press TALK, speak a little longer, then press STOP.');
+        });
+        return;
+      }
+      final turn = await _api.sendAudio(file);
       setState(() {
         _status = 'Speaking';
         if (turn.transcript.isNotEmpty) {
@@ -116,9 +125,10 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
         }
         _lines.add('Assistant: ${turn.replyText}');
       });
-      if (turn.audioBytes.isNotEmpty) {
-        await _player.play(BytesSource(turn.audioBytes, mimeType: 'audio/wav'));
-        await _player.onPlayerComplete.first;
+      try {
+        await _speaker.playWav(turn.audioBytes);
+      } catch (_) {
+        // Keep the text reply even if the speaker path fails.
       }
       await _loadOverview();
       setState(() {

@@ -50,6 +50,7 @@
   "CHECK_APPOINTMENT": [
     "When is my next doctor's appointment",
     "Do I have a doctor appointment",
+    "Do I have my next appointment to the doctor",
     "When do I see Dr Kumar",
     "Check my appointments",
     "What time is my clinic visit",
@@ -81,6 +82,8 @@
     "What is Priya to me",
     "Who is my son",
     "Who is my daughter",
+    "Who am I",
+    "Who am I and who is my family",
     "Do I know this person"
   ],
   "ASK_MEMORY": [

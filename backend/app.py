@@ -23,6 +23,20 @@ app.add_middleware(
 app.include_router(api_router)
 
 
+@app.get("/")
+def root() -> dict:
+    return {
+        "ok": True,
+        "name": "Alzheimer Voice Assistant API",
+        "hint": "This is the backend, not the patient screen. Use Flutter for the app.",
+        "health": "/health",
+        "docs": "/docs",
+        "overview": "/v1/patient/overview",
+        "voice": "POST /v1/voice/turn",
+        "text_test": "POST /v1/text/turn",
+    }
+
+
 @app.get("/health")
 def health() -> dict:
     container = get_container()

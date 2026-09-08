@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import logging
+import re
 import tempfile
 from pathlib import Path
 
 from utils.audio import apology_tone_wav, numpy_pcm_to_wav
 from utils.config import Settings
+from utils.ffmpeg_audio import wav_bytes_pcm16
 
 logger = logging.getLogger(__name__)
 
@@ -30,21 +32,29 @@ class CoquiTTS:
                 self._sample_rate = int(output_sr)
 
     def speak(self, text: str) -> bytes:
-        spoken = text.strip() or "I am here."
+        spoken = _for_speech(text)
         try:
             self.load()
             assert self._tts is not None
-            wav = self._tts.tts(text=spoken)
-            return numpy_pcm_to_wav(wav, self._sample_rate)
-        except Exception as exc:
-            logger.exception("Coqui TTS failed, writing file fallback: %s", exc)
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as handle:
+                path = Path(handle.name)
             try:
-                self.load()
-                assert self._tts is not None
-                with tempfile.NamedTemporaryFile(suffix=".wav", delete=True) as handle:
-                    path = Path(handle.name)
-                    self._tts.tts_to_file(text=spoken, file_path=str(path))
-                    return path.read_bytes()
-            except Exception:
-                logger.exception("Coqui TTS file fallback also failed")
-                return apology_tone_wav()
+                self._tts.tts_to_file(text=spoken, file_path=str(path))
+                data = path.read_bytes()
+                if len(data) > 44:
+                    return wav_bytes_pcm16(data, sample_rate=self._sample_rate)
+            finally:
+                path.unlink(missing_ok=True)
+            wav = self._tts.tts(text=spoken)
+            return wav_bytes_pcm16(numpy_pcm_to_wav(wav, self._sample_rate), sample_rate=self._sample_rate)
+        except Exception:
+            logger.exception("Coqui TTS failed")
+            return wav_bytes_pcm16(apology_tone_wav(), sample_rate=22050)
+
+
+def _for_speech(text: str) -> str:
+    cleaned = re.sub(r"[*_`#]+", "", text)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    if len(cleaned) > 400:
+        cleaned = cleaned[:400].rsplit(" ", 1)[0]
+    return cleaned or "I am here with you."

@@ -39,3 +39,18 @@ def test_dialogue_does_not_use_llm_to_mutate_reminders():
     assert decision.mutated is True
     assert len(repos.reminders.list_all()) == before + 1
     assert "Reminder created" in decision.facts
+
+
+def test_compound_who_am_i_and_appointment_uses_real_facts():
+    repos = load_seed(ROOT / "data" / "seed.json")
+    manager = DialogueManager(
+        reminders=ReminderManager(repos.reminders),
+        appointments=AppointmentService(repos.appointments),
+        memory=MemoryService(repos.memory, NullSemanticMemory()),
+        emergency=EmergencyService(repos.activity),
+    )
+    text = "Who am I? And do I have my next appointment to the doctor?"
+    decision = manager.handle(_nlu(text, Intent.UNKNOWN))
+    assert "UNKNOWN" not in decision.facts
+    assert "helper" in decision.facts.lower() or "Priya" in decision.facts
+    assert "Kumar" in decision.facts or "appointment" in decision.facts.lower()

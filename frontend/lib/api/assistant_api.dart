@@ -57,12 +57,19 @@ class AssistantApi {
 
   Future<VoiceTurn> sendAudio(File wavFile) async {
     final request = http.MultipartRequest('POST', Uri.parse('$baseUrl/v1/voice/turn'));
-    request.files.add(await http.MultipartFile.fromPath('audio', wavFile.path));
-    final streamed = await request.send();
-    final body = await streamed.stream.bytesToString();
-    if (streamed.statusCode != 200) {
-      throw HttpException('Voice turn failed (${streamed.statusCode}): $body');
+    request.files.add(
+      await http.MultipartFile.fromPath('audio', wavFile.path, filename: 'speech.wav'),
+    );
+    final client = http.Client();
+    try {
+      final streamed = await client.send(request).timeout(const Duration(minutes: 10));
+      final body = await streamed.stream.bytesToString();
+      if (streamed.statusCode != 200) {
+        throw HttpException('Voice turn failed (${streamed.statusCode}): $body');
+      }
+      return VoiceTurn.fromJson(jsonDecode(body) as Map<String, dynamic>);
+    } finally {
+      client.close();
     }
-    return VoiceTurn.fromJson(jsonDecode(body) as Map<String, dynamic>);
   }
 }

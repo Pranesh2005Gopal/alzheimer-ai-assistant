@@ -24,6 +24,14 @@ The app talks to `http://127.0.0.1:8080` on desktop and `http://10.0.2.2:8080` o
 
 Grant microphone permission when asked.
 
+On Linux, speech playback uses `ffplay` / `ffmpeg` / `paplay` (not GStreamer). Keep `ffmpeg` installed:
+
+```bash
+sudo pacman -S ffmpeg
+```
+
+If there is still no sound, also try: `sudo pacman -S pipewire-pulse`.
+
 ## 2. Python virtual environment
 
 ```bash

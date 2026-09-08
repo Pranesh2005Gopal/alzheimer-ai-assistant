@@ -28,3 +28,7 @@ class NLUResult(BaseModel):
     spacy: SpacyDocumentView
     temporal: list[TemporalEntity] = Field(default_factory=list)
     person_mentions: list[str] = Field(default_factory=list)
+    followups: list["NLUResult"] = Field(default_factory=list)
+
+
+NLUResult.model_rebuild()

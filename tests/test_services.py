@@ -45,3 +45,22 @@ def test_memory_who_is_arun():
     )
     answer = memory.identify(nlu)
     assert "son" in answer.lower()
+
+
+def test_memory_who_am_i():
+    repos = load_seed(ROOT / "data" / "seed.json")
+    memory = MemoryService(repos.memory, NullSemanticMemory())
+    from models.intents import Intent
+    from models.nlu import NLUResult, SpacyDocumentView
+
+    nlu = NLUResult(
+        raw_text="Who am I?",
+        normalized_text="Who am I?",
+        intent=Intent.ASK_PERSON_IDENTITY,
+        intent_confidence=0.4,
+        spacy=SpacyDocumentView(),
+        person_mentions=[],
+    )
+    answer = memory.identify(nlu)
+    assert "helper" in answer.lower()
+    assert "Priya" in answer

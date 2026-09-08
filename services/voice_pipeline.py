@@ -57,6 +57,8 @@ class VoicePipeline:
             conversation=self.history.as_llm_messages(),
         )
         audio = self.tts.speak(reply)
+        if len(audio) <= 44:
+            audio = self.tts.speak("I am here with you.")
         self.history.add("patient", transcript, nlu.intent.value)
         self.history.add("assistant", reply, nlu.intent.value)
         self.activity.log(

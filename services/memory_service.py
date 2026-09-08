@@ -20,6 +20,9 @@ class MemoryService:
         self.semantic = semantic
 
     def identify(self, nlu: NLUResult) -> str:
+        lowered = nlu.normalized_text.lower()
+        if self._is_self_question(lowered):
+            return self.spoken_self()
         for name in nlu.person_mentions:
             person = self.repo.get_person_by_name(name)
             if person:
@@ -36,6 +39,20 @@ class MemoryService:
                 return f"{person.name} is your {person.relationship}."
         people = ", ".join(f"{p.name} ({p.relationship})" for p in self.repo.list_people())
         return f"I am not sure who you mean. Known people: {people}." if people else "I do not know this person yet."
+
+    def spoken_self(self) -> str:
+        people = self.repo.list_people()
+        if not people:
+            return "You are at home. I am your helper, and I am here with you."
+        relations = " ".join(f"{person.name} is your {person.relationship}." for person in people)
+        return f"You are at home. I am your helper. {relations}"
+
+    @staticmethod
+    def _is_self_question(lowered: str) -> bool:
+        return any(
+            phrase in lowered
+            for phrase in ("who am i", "who am i?", "what is my name", "what's my name", "who i am")
+        )
 
     def recall(self, query: str) -> str:
         semantic_hits = self.semantic.search(query)

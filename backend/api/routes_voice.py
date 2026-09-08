@@ -19,12 +19,16 @@ async def voice_turn(audio: UploadFile = File(...)) -> dict:
     """
     suffix = Path(audio.filename or "speech.wav").suffix or ".wav"
     data = await audio.read()
-    if not data:
-        raise HTTPException(status_code=400, detail="Empty audio upload")
-    with tempfile.NamedTemporaryFile(suffix=suffix, delete=True) as handle:
+    if not data or len(data) < 500:
+        raise HTTPException(status_code=400, detail="Audio recording was empty. Hold TALK and speak, then press STOP.")
+    handle = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
+    path = Path(handle.name)
+    try:
         handle.write(data)
-        handle.flush()
-        result = get_container().pipeline.run_audio_file(Path(handle.name))
+        handle.close()
+        result = get_container().pipeline.run_audio_file(path)
+    finally:
+        path.unlink(missing_ok=True)
     return {
         "transcript": result.transcript,
         "intent": result.intent,
