@@ -183,9 +183,48 @@ class AssistantApi {
     return ReminderItem.fromJson(data['reminder'] as Map<String, dynamic>);
   }
 
+  Future<bool> deleteReminder(String id) async {
+    final response = await http.delete(Uri.parse('$baseUrl/v1/reminders/$id'));
+    return response.statusCode == 200;
+  }
+
   Future<List<AppointmentItem>> listAppointments() async {
     final response = await http.get(Uri.parse('$baseUrl/v1/appointments'));
     return _mapList(response, 'Appointments', 'appointments', AppointmentItem.fromJson);
+  }
+
+  Future<AppointmentItem> createAppointment({
+    required String doctor,
+    required String dateIso,
+    required String timeIso,
+    String location = '',
+    String purpose = '',
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/v1/appointments'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'doctor': doctor,
+        'date_iso': dateIso,
+        'time_iso': timeIso,
+        'location': location,
+        'purpose': purpose,
+      }),
+    );
+    if (response.statusCode != 200) {
+      throw HttpException('Could not schedule appointment (${response.statusCode})');
+    }
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    return AppointmentItem.fromJson(data['appointment'] as Map<String, dynamic>);
+  }
+
+  Future<bool> addCareNote({required String note, String category = 'observation'}) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/v1/care/notes'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'note': note, 'category': category}),
+    );
+    return response.statusCode == 200;
   }
 
   Future<Map<String, dynamic>> memory() async {

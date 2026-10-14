@@ -272,3 +272,49 @@ class TestAuthRoutes:
 
         resp = client.get("/v1/private", headers=headers)
         assert resp.status_code == 403
+
+    def test_caregiver_assigned_patients_and_audit(self, client):
+        # Register patient
+        p_resp = client.post("/v1/auth/register", json={
+            "email": "patient_audit@memory.care", "password": "SecurePass123",
+            "full_name": "Audit Patient", "role": "patient",
+        })
+        p_token = p_resp.json()["token"]
+        p_id = p_resp.json()["user"]["id"]
+
+        # Register caregiver
+        c_resp = client.post("/v1/auth/register", json={
+            "email": "caregiver_audit@memory.care", "password": "SecurePass123",
+            "full_name": "Audit Caregiver", "role": "caregiver",
+        })
+        c_token = c_resp.json()["token"]
+        c_id = c_resp.json()["user"]["id"]
+
+        # Check assigned patients initially empty
+        c_headers = {"Authorization": f"Bearer {c_token}"}
+        resp = client.get("/v1/caregiver/assigned-patients", headers=c_headers)
+        assert resp.status_code == 200
+        assert len(resp.json()["patients"]) == 0
+
+        # Patient assigns caregiver
+        p_headers = {"Authorization": f"Bearer {p_token}"}
+        resp = client.post("/v1/profile/caregiver-permissions", json={
+            "caregiver_id": c_id, "permissions": ["full_name", "hobbies"],
+        }, headers=p_headers)
+        assert resp.status_code == 200
+
+        # Caregiver now sees assigned patient
+        resp = client.get("/v1/caregiver/assigned-patients", headers=c_headers)
+        assert resp.status_code == 200
+        assert len(resp.json()["patients"]) == 1
+        assert resp.json()["patients"][0]["id"] == p_id
+
+        # Caregiver views patient profile -> creates audit event
+        resp = client.get(f"/v1/caregiver/{p_id}/profile", headers=c_headers)
+        assert resp.status_code == 200
+
+        # View audit logs
+        audit_resp = client.get("/v1/auth/audit", headers=c_headers)
+        assert audit_resp.status_code == 200
+        assert len(audit_resp.json()["audit_logs"]) >= 1
+

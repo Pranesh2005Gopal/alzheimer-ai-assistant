@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 
 import '../models/care_models.dart';
 import '../state/assistant_controller.dart';
+import '../state/auth_controller.dart';
 import '../theme/app_colors.dart';
+import 'caretaker_dashboard_screen.dart';
 import 'dashboard_screen.dart';
 import 'face_recognition_screen.dart';
 import 'memory_screen.dart';
+import 'patient_dashboard_screen.dart';
 import 'private_info_screen.dart';
 import 'profile_screen.dart';
 import 'reminders_screen.dart';
@@ -16,16 +19,30 @@ import 'voice_screen.dart';
 // Navigation destinations
 // ---------------------------------------------------------------------------
 
-const _kDestinations = <_NavDest>[
-  _NavDest(icon: Icons.home_outlined, activeIcon: Icons.home, label: 'Home'),
-  _NavDest(icon: Icons.mic_none, activeIcon: Icons.mic, label: 'Assistant'),
-  _NavDest(icon: Icons.alarm_outlined, activeIcon: Icons.alarm, label: 'Reminders'),
-  _NavDest(icon: Icons.auto_stories_outlined, activeIcon: Icons.auto_stories, label: 'Memory'),
-  _NavDest(icon: Icons.face_outlined, activeIcon: Icons.face, label: 'Faces'),
-  _NavDest(icon: Icons.person_outline, activeIcon: Icons.person, label: 'Profile'),
-  _NavDest(icon: Icons.health_and_safety_outlined, activeIcon: Icons.health_and_safety, label: 'Private'),
-  _NavDest(icon: Icons.settings_outlined, activeIcon: Icons.settings, label: 'Settings'),
-];
+List<_NavDest> _getDestinations(bool isCaregiver) {
+  if (isCaregiver) {
+    return const [
+      _NavDest(icon: Icons.dashboard_outlined, activeIcon: Icons.dashboard, label: 'Care Home'),
+      _NavDest(icon: Icons.mic_none, activeIcon: Icons.mic, label: 'Assistant'),
+      _NavDest(icon: Icons.checklist_rtl_outlined, activeIcon: Icons.checklist_rtl, label: 'Tasks'),
+      _NavDest(icon: Icons.auto_stories_outlined, activeIcon: Icons.auto_stories, label: 'Memory'),
+      _NavDest(icon: Icons.face_outlined, activeIcon: Icons.face, label: 'Vision'),
+      _NavDest(icon: Icons.person_outline, activeIcon: Icons.person, label: 'Profile'),
+      _NavDest(icon: Icons.health_and_safety_outlined, activeIcon: Icons.health_and_safety, label: 'Medical'),
+      _NavDest(icon: Icons.settings_outlined, activeIcon: Icons.settings, label: 'Settings'),
+    ];
+  }
+  return const [
+    _NavDest(icon: Icons.home_outlined, activeIcon: Icons.home, label: 'Home'),
+    _NavDest(icon: Icons.mic_none, activeIcon: Icons.mic, label: 'Talk'),
+    _NavDest(icon: Icons.alarm_outlined, activeIcon: Icons.alarm, label: 'Reminders'),
+    _NavDest(icon: Icons.auto_stories_outlined, activeIcon: Icons.auto_stories, label: 'Memories'),
+    _NavDest(icon: Icons.face_outlined, activeIcon: Icons.face, label: 'Faces'),
+    _NavDest(icon: Icons.person_outline, activeIcon: Icons.person, label: 'Profile'),
+    _NavDest(icon: Icons.health_and_safety_outlined, activeIcon: Icons.health_and_safety, label: 'Private'),
+    _NavDest(icon: Icons.settings_outlined, activeIcon: Icons.settings, label: 'Settings'),
+  ];
+}
 
 class _NavDest {
   const _NavDest({required this.icon, required this.activeIcon, required this.label});
@@ -45,6 +62,10 @@ class AppShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = AssistantScope.of(context);
+    final auth = AuthScope.of(context);
+    final isCaregiver = auth.user?.role == 'caregiver';
+    final destinations = _getDestinations(isCaregiver);
+
     return ListenableBuilder(
       listenable: controller,
       builder: (context, _) {
@@ -52,11 +73,22 @@ class AppShell extends StatelessWidget {
           builder: (context, constraints) {
             final width = constraints.maxWidth;
             if (width >= 1024) {
-              return _ExpandedShell(controller: controller);
+              return _ExpandedShell(
+                controller: controller,
+                destinations: destinations,
+                isCaregiver: isCaregiver,
+              );
             } else if (width >= 600) {
-              return _MediumShell(controller: controller);
+              return _MediumShell(
+                controller: controller,
+                destinations: destinations,
+                isCaregiver: isCaregiver,
+              );
             } else {
-              return _CompactShell(controller: controller);
+              return _CompactShell(
+                controller: controller,
+                destinations: destinations,
+              );
             }
           },
         );
@@ -65,9 +97,15 @@ class AppShell extends StatelessWidget {
   }
 
   static Widget _buildPage(BuildContext context, int index, AssistantController controller) {
+    final auth = AuthScope.of(context);
+    final isCaregiver = auth.user?.role == 'caregiver';
+
     switch (index) {
       case 0:
-        return DashboardScreen(onNavigate: controller.selectNav);
+        if (isCaregiver) {
+          return CaretakerDashboardScreen(onNavigate: controller.selectNav);
+        }
+        return PatientDashboardScreen(onNavigate: controller.selectNav);
       case 1:
         return const VoiceScreen();
       case 2:
@@ -83,7 +121,10 @@ class AppShell extends StatelessWidget {
       case 7:
         return const SettingsScreen();
       default:
-        return DashboardScreen(onNavigate: controller.selectNav);
+        if (isCaregiver) {
+          return CaretakerDashboardScreen(onNavigate: controller.selectNav);
+        }
+        return PatientDashboardScreen(onNavigate: controller.selectNav);
     }
   }
 }
@@ -93,18 +134,22 @@ class AppShell extends StatelessWidget {
 // ---------------------------------------------------------------------------
 
 class _CompactShell extends StatelessWidget {
-  const _CompactShell({required this.controller});
+  const _CompactShell({
+    required this.controller,
+    required this.destinations,
+  });
 
   final AssistantController controller;
+  final List<_NavDest> destinations;
 
   @override
   Widget build(BuildContext context) {
-    final index = controller.navIndex.clamp(0, _kDestinations.length - 1);
+    final index = controller.navIndex.clamp(0, destinations.length - 1);
     return Scaffold(
       body: IndexedStack(
         index: index,
         children: [
-          for (var i = 0; i < _kDestinations.length; i++)
+          for (var i = 0; i < destinations.length; i++)
             AppShell._buildPage(context, i, controller),
         ],
       ),
@@ -113,7 +158,7 @@ class _CompactShell extends StatelessWidget {
         onDestinationSelected: controller.selectNav,
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
         destinations: [
-          for (final dest in _kDestinations)
+          for (final dest in destinations)
             NavigationDestination(
               icon: Icon(dest.icon),
               selectedIcon: Icon(dest.activeIcon),
@@ -130,13 +175,19 @@ class _CompactShell extends StatelessWidget {
 // ---------------------------------------------------------------------------
 
 class _MediumShell extends StatelessWidget {
-  const _MediumShell({required this.controller});
+  const _MediumShell({
+    required this.controller,
+    required this.destinations,
+    required this.isCaregiver,
+  });
 
   final AssistantController controller;
+  final List<_NavDest> destinations;
+  final bool isCaregiver;
 
   @override
   Widget build(BuildContext context) {
-    final index = controller.navIndex.clamp(0, _kDestinations.length - 1);
+    final index = controller.navIndex.clamp(0, destinations.length - 1);
     return Scaffold(
       body: Row(
         children: [
@@ -144,10 +195,10 @@ class _MediumShell extends StatelessWidget {
             selectedIndex: index,
             onDestinationSelected: controller.selectNav,
             extended: false,
-            leading: _RailLogo(),
+            leading: _RailLogo(isCaregiver: isCaregiver),
             labelType: NavigationRailLabelType.all,
             destinations: [
-              for (final dest in _kDestinations)
+              for (final dest in destinations)
                 NavigationRailDestination(
                   icon: Icon(dest.icon),
                   selectedIcon: Icon(dest.activeIcon),
@@ -160,7 +211,7 @@ class _MediumShell extends StatelessWidget {
             child: IndexedStack(
               index: index,
               children: [
-                for (var i = 0; i < _kDestinations.length; i++)
+                for (var i = 0; i < destinations.length; i++)
                   AppShell._buildPage(context, i, controller),
               ],
             ),
@@ -176,13 +227,19 @@ class _MediumShell extends StatelessWidget {
 // ---------------------------------------------------------------------------
 
 class _ExpandedShell extends StatelessWidget {
-  const _ExpandedShell({required this.controller});
+  const _ExpandedShell({
+    required this.controller,
+    required this.destinations,
+    required this.isCaregiver,
+  });
 
   final AssistantController controller;
+  final List<_NavDest> destinations;
+  final bool isCaregiver;
 
   @override
   Widget build(BuildContext context) {
-    final index = controller.navIndex.clamp(0, _kDestinations.length - 1);
+    final index = controller.navIndex.clamp(0, destinations.length - 1);
     return Scaffold(
       body: Row(
         children: [
@@ -191,10 +248,10 @@ class _ExpandedShell extends StatelessWidget {
             onDestinationSelected: controller.selectNav,
             extended: true,
             minExtendedWidth: 200,
-            leading: _RailLogo(extended: true),
+            leading: _RailLogo(extended: true, isCaregiver: isCaregiver),
             trailing: _RailStatus(controller: controller),
             destinations: [
-              for (final dest in _kDestinations)
+              for (final dest in destinations)
                 NavigationRailDestination(
                   icon: Icon(dest.icon),
                   selectedIcon: Icon(dest.activeIcon),
@@ -207,7 +264,7 @@ class _ExpandedShell extends StatelessWidget {
             child: IndexedStack(
               index: index,
               children: [
-                for (var i = 0; i < _kDestinations.length; i++)
+                for (var i = 0; i < destinations.length; i++)
                   AppShell._buildPage(context, i, controller),
               ],
             ),
@@ -223,32 +280,34 @@ class _ExpandedShell extends StatelessWidget {
 // ---------------------------------------------------------------------------
 
 class _RailLogo extends StatelessWidget {
-  const _RailLogo({this.extended = false});
+  const _RailLogo({this.extended = false, this.isCaregiver = false});
 
   final bool extended;
+  final bool isCaregiver;
 
   @override
   Widget build(BuildContext context) {
     final color = Theme.of(context).colorScheme.primary;
+    final title = isCaregiver ? 'Care Management' : 'Memory Care';
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 20),
       child: extended
           ? Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.local_hospital_rounded, color: color, size: 26),
+                Icon(isCaregiver ? Icons.healing_rounded : Icons.local_hospital_rounded, color: color, size: 26),
                 const SizedBox(width: 8),
                 Text(
-                  'Memory Care',
+                  title,
                   style: TextStyle(
                     color: color,
                     fontWeight: FontWeight.w800,
-                    fontSize: 17,
+                    fontSize: 16,
                   ),
                 ),
               ],
             )
-          : Icon(Icons.local_hospital_rounded, color: color, size: 26),
+          : Icon(isCaregiver ? Icons.healing_rounded : Icons.local_hospital_rounded, color: color, size: 26),
     );
   }
 }

@@ -17,9 +17,12 @@ from backend.auth.store import (
     create_session,
     create_user,
     delete_session,
+    get_assigned_patients,
+    get_audit_logs,
     get_caregiver_permissions,
     get_private,
     get_user_by_id,
+    log_audit_event,
     set_caregiver_permission,
     set_pin,
     update_private,
@@ -282,6 +285,14 @@ def set_permissions(body: CaregiverPermissionRequest, user: dict = Depends(get_c
     return {"ok": True}
 
 
+@router.get("/caregiver/assigned-patients")
+def list_assigned_patients(user: dict = Depends(get_current_user)) -> dict:
+    if user["role"] not in ("caregiver", "admin"):
+        raise HTTPException(status_code=403, detail="Caregivers only")
+    patients = get_assigned_patients(user["id"])
+    return {"patients": patients}
+
+
 @router.get("/caregiver/{patient_id}/profile")
 def caregiver_view_profile(patient_id: str, user: dict = Depends(get_current_user)) -> dict:
     """Caregiver views a patient's profile - only allowed fields."""
@@ -291,6 +302,7 @@ def caregiver_view_profile(patient_id: str, user: dict = Depends(get_current_use
     patient = get_user_by_id(patient_id)
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
+    log_audit_event(user["id"], "view_profile", patient_id, f"Permissions: {perms}")
     # Filter profile to only permitted fields
     full_profile = patient["profile"]
     if "all" in perms:
@@ -310,5 +322,13 @@ def caregiver_view_private(
     if "private_info" not in perms and "all" not in perms:
         raise HTTPException(status_code=403, detail="No permission to view private information")
     _validate_grant(user["id"], private_grant)
+    log_audit_event(user["id"], "view_private_records", patient_id, "Access authorized via PIN grant")
     data = get_private(patient_id)
     return {"private": data}
+
+
+@router.get("/auth/audit")
+def list_audit_logs(user: dict = Depends(get_current_user)) -> dict:
+    logs = get_audit_logs(user["id"] if user["role"] == "patient" else None)
+    return {"audit_logs": logs}
+

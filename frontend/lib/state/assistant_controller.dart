@@ -45,6 +45,11 @@ class AssistantController extends ChangeNotifier {
   int navIndex = 0;
   ThemeMode get themeMode => _settings.themeMode;
   String get apiBase => _api.baseUrl;
+  AssistantApi get api => _api;
+
+  Future<void> refresh() async {
+    await refreshOverview();
+  }
 
   AssistantLink get link {
     if (health == null && loadError == null) {

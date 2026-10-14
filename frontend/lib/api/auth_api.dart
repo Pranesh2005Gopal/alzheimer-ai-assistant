@@ -254,4 +254,26 @@ class AuthApi {
       'permissions': permissions,
     });
   }
+
+  Future<List<Map<String, dynamic>>> getAssignedPatients() async {
+    final data = await _get('/v1/caregiver/assigned-patients');
+    final list = data['patients'] as List<dynamic>? ?? [];
+    return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  Future<UserProfile> getCaregiverPatientProfile(String patientId) async {
+    final data = await _get('/v1/caregiver/$patientId/profile');
+    return UserProfile.fromJson(data['profile'] as Map<String, dynamic>? ?? {});
+  }
+
+  Future<PrivateInfo> getCaregiverPatientPrivate(String patientId, {required String grant}) async {
+    final data = await _get('/v1/caregiver/$patientId/private', query: {'private_grant': grant});
+    return PrivateInfo.fromJson(data['private'] as Map<String, dynamic>? ?? {});
+  }
+
+  Future<List<Map<String, dynamic>>> getAuditLogs() async {
+    final data = await _get('/v1/auth/audit');
+    final list = data['audit_logs'] as List<dynamic>? ?? [];
+    return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
 }

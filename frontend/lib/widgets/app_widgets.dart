@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 
 import '../models/care_models.dart';
@@ -426,5 +429,105 @@ class ActivityTile extends StatelessWidget {
       default:
         return Icons.history;
     }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Reusable Live Clock Widget – Real-time updates without page refresh
+// ---------------------------------------------------------------------------
+
+class LiveClockWidget extends StatefulWidget {
+  const LiveClockWidget({
+    super.key,
+    this.dark = true,
+    this.fontSize = 36,
+    this.dateFontSize = 15,
+    this.showSeconds = true,
+    this.alignment = CrossAxisAlignment.start,
+  });
+
+  final bool dark;
+  final double fontSize;
+  final double dateFontSize;
+  final bool showSeconds;
+  final CrossAxisAlignment alignment;
+
+  @override
+  State<LiveClockWidget> createState() => _LiveClockWidgetState();
+}
+
+class _LiveClockWidgetState extends State<LiveClockWidget> {
+  late DateTime _now;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _now = DateTime.now();
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() => _now = DateTime.now());
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final timeStr = _formatTime(_now, widget.showSeconds);
+    final dateStr = _formatDate(_now);
+    final textColor = widget.dark ? Theme.of(context).colorScheme.onSurface : Colors.white;
+    final mutedColor = widget.dark
+        ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.65)
+        : Colors.white.withValues(alpha: 0.85);
+
+    return Column(
+      crossAxisAlignment: widget.alignment,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          timeStr,
+          style: TextStyle(
+            fontSize: widget.fontSize,
+            fontWeight: FontWeight.w700,
+            color: textColor,
+            letterSpacing: -0.5,
+            fontFeatures: const [FontFeature.tabularFigures()],
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          dateStr,
+          style: TextStyle(
+            fontSize: widget.dateFontSize,
+            fontWeight: FontWeight.w500,
+            color: mutedColor,
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _formatTime(DateTime dt, bool showSeconds) {
+    final h = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
+    final m = dt.minute.toString().padLeft(2, '0');
+    final s = dt.second.toString().padLeft(2, '0');
+    final period = dt.hour < 12 ? 'AM' : 'PM';
+    if (showSeconds) {
+      return '$h:$m:$s $period';
+    }
+    return '$h:$m $period';
+  }
+
+  String _formatDate(DateTime dt) {
+    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    const months = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December',
+    ];
+    return '${days[dt.weekday - 1]}, ${months[dt.month - 1]} ${dt.day}, ${dt.year}';
   }
 }

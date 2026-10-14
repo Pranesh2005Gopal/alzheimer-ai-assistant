@@ -30,3 +30,21 @@ class AppointmentService:
             purpose=text,
         )
         return self.repo.add(appointment)
+
+    def create(
+        self,
+        doctor: str,
+        date_iso: str,
+        time_iso: str,
+        location: str = "",
+        purpose: str = "",
+    ) -> Appointment:
+        appointment = Appointment(
+            id=uuid4().hex[:12],
+            doctor=doctor.strip() or "Doctor",
+            date_iso=date_iso.strip(),
+            time_iso=time_iso.strip(),
+            location=location.strip(),
+            purpose=purpose.strip(),
+        )
+        return self.repo.add(appointment)

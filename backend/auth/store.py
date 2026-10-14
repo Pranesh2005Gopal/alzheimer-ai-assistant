@@ -256,6 +256,66 @@ def get_caregiver_permissions(patient_id: str, caregiver_id: str) -> list[str]:
         return []
 
 
+def get_assigned_patients(caregiver_id: str) -> list[dict]:
+    with _LOCK:
+        users = _load_users()
+        assigned = []
+        for u in users:
+            if u.get("role") == "patient":
+                perms = u.get("caregiver_permissions", {}).get(caregiver_id, [])
+                if perms:
+                    assigned.append({
+                        "id": u["id"],
+                        "email": u["email"],
+                        "name": u.get("profile", {}).get("full_name") or u.get("profile", {}).get("preferred_name") or "Patient",
+                        "preferred_name": u.get("profile", {}).get("preferred_name") or "Patient",
+                        "avatar_url": u.get("profile", {}).get("avatar_url") or "",
+                        "permissions": perms,
+                    })
+        return assigned
+
+
+_AUDIT_LOGS_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "audit_logs.json"
+
+
+def _load_audit_logs() -> list[dict]:
+    if not _AUDIT_LOGS_PATH.exists():
+        return []
+    try:
+        return json.loads(_AUDIT_LOGS_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+
+
+def _save_audit_logs(logs: list[dict]) -> None:
+    _AUDIT_LOGS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    _AUDIT_LOGS_PATH.write_text(json.dumps(logs, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def log_audit_event(user_id: str, action: str, target: str, details: str = "") -> dict:
+    with _LOCK:
+        logs = _load_audit_logs()
+        event = {
+            "id": uuid.uuid4().hex[:12],
+            "user_id": user_id,
+            "action": action,
+            "target": target,
+            "details": details,
+            "timestamp": _now_iso(),
+        }
+        logs.append(event)
+        _save_audit_logs(logs[-200:])
+        return event
+
+
+def get_audit_logs(user_id: Optional[str] = None) -> list[dict]:
+    with _LOCK:
+        logs = _load_audit_logs()
+        if user_id:
+            return list(reversed([l for l in logs if l.get("user_id") == user_id]))
+        return list(reversed(logs[-50:]))
+
+
 def change_password(user_id: str, old_password: str, new_password: str) -> None:
     with _LOCK:
         users = _load_users()

@@ -28,6 +28,19 @@ class MemoryNoteRequest(BaseModel):
     text: str = Field(min_length=1)
 
 
+class CreateAppointmentRequest(BaseModel):
+    doctor: str = Field(min_length=1)
+    date_iso: str = Field(min_length=1)
+    time_iso: str = Field(min_length=1)
+    location: str = ""
+    purpose: str = ""
+
+
+class CareNoteRequest(BaseModel):
+    note: str = Field(min_length=1)
+    category: str = "observation"
+
+
 def _reminder_payload(reminder) -> dict:
     return {
         "id": reminder.id,
@@ -97,12 +110,51 @@ def complete_reminder(reminder_id: str) -> dict:
     return {"reminder": _reminder_payload(reminder)}
 
 
+@router.delete("/reminders/{reminder_id}")
+def delete_reminder(reminder_id: str) -> dict:
+    container = get_container()
+    deleted = container.reminders.repo.delete(reminder_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Reminder not found.")
+    container.activity.log("reminder", f"Reminder removed: {reminder_id}", {"reminder_id": reminder_id})
+    return {"ok": True, "reminder_id": reminder_id}
+
+
 @router.get("/appointments")
 def list_appointments() -> dict:
     container = get_container()
     items = [_appointment_payload(item) for item in container.repos.appointments.list_all()]
     items.sort(key=lambda row: (row["date"], row["time"]))
     return {"appointments": items}
+
+
+@router.post("/appointments")
+def create_appointment(body: CreateAppointmentRequest) -> dict:
+    container = get_container()
+    appointment = container.appointments.create(
+        doctor=body.doctor,
+        date_iso=body.date_iso,
+        time_iso=body.time_iso,
+        location=body.location,
+        purpose=body.purpose,
+    )
+    container.activity.log(
+        "appointment",
+        f"Appointment scheduled with {appointment.doctor} on {appointment.date_iso} at {appointment.time_iso}",
+        {"appointment_id": appointment.id},
+    )
+    return {"appointment": _appointment_payload(appointment)}
+
+
+@router.post("/care/notes")
+def add_care_note(body: CareNoteRequest) -> dict:
+    container = get_container()
+    event = container.activity.log(
+        "care_note",
+        body.note.strip(),
+        {"category": body.category},
+    )
+    return {"ok": True, "event_id": event.id, "summary": event.summary, "time": event.timestamp_iso}
 
 
 @router.get("/memory")
