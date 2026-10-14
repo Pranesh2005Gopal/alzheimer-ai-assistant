@@ -6,6 +6,8 @@ import '../theme/app_colors.dart';
 import 'dashboard_screen.dart';
 import 'face_recognition_screen.dart';
 import 'memory_screen.dart';
+import 'private_info_screen.dart';
+import 'profile_screen.dart';
 import 'reminders_screen.dart';
 import 'settings_screen.dart';
 import 'voice_screen.dart';
@@ -20,6 +22,8 @@ const _kDestinations = <_NavDest>[
   _NavDest(icon: Icons.alarm_outlined, activeIcon: Icons.alarm, label: 'Reminders'),
   _NavDest(icon: Icons.auto_stories_outlined, activeIcon: Icons.auto_stories, label: 'Memory'),
   _NavDest(icon: Icons.face_outlined, activeIcon: Icons.face, label: 'Faces'),
+  _NavDest(icon: Icons.person_outline, activeIcon: Icons.person, label: 'Profile'),
+  _NavDest(icon: Icons.health_and_safety_outlined, activeIcon: Icons.health_and_safety, label: 'Private'),
   _NavDest(icon: Icons.settings_outlined, activeIcon: Icons.settings, label: 'Settings'),
 ];
 
@@ -73,6 +77,10 @@ class AppShell extends StatelessWidget {
       case 4:
         return const FaceRecognitionScreen();
       case 5:
+        return const ProfileScreen();
+      case 6:
+        return const PrivateInfoScreen();
+      case 7:
         return const SettingsScreen();
       default:
         return DashboardScreen(onNavigate: controller.selectNav);

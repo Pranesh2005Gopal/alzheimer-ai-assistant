@@ -16,6 +16,7 @@ class AppColors {
   static const line = Color(0xFFD7E2EC);
   static const warning = Color(0xFFB45309);
   static const danger = Color(0xFFB91C1C);
+  static const error = danger;
   static const success = Color(0xFF047857);
 }
 

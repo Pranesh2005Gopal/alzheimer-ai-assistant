@@ -1,0 +1,75 @@
+[
+  {
+    "id": "b65f5da1a090404e",
+    "email": "demo@memory.care",
+    "password_hash": "pbkdf2$260000$ce74838011d15aece33926545464403a$d881c8a52db0345ec55d7cfc77ab97b9693c98ea06fe4c6fcd99c31488b5efe4",
+    "pin_hash": "pbkdf2$260000$33b436a28497b12047ae5004f30de112$1d291de7ed1fa4b859d796569dab9c74195b8eaa564a2b3194add6e4d40c7abf",
+    "role": "patient",
+    "profile": {
+      "full_name": "Arthur Pendelton",
+      "preferred_name": "Arthur",
+      "avatar_url": "",
+      "date_of_birth": "1948-06-15",
+      "language": "en",
+      "voice_preference": "female",
+      "hobbies": [
+        "Gardening",
+        "Classical Music",
+        "Chess",
+        "Bird Watching"
+      ],
+      "daily_routine": [
+        "Morning walk at 7:30 AM",
+        "Breakfast at 8:30 AM",
+        "Medication at 9:00 AM",
+        "Afternoon nap at 1:30 PM",
+        "Dinner at 7:00 PM"
+      ],
+      "important_dates": [],
+      "personal_memories": [
+        "Lived in Bristol for 30 years",
+        "Worked as an architect",
+        "Golden retriever named Buster"
+      ]
+    },
+    "private": {
+      "medical_conditions": "5zRCKvU0/pobPvs1MCGiNLueuykd+d0Eh2q9VyKoWLBnHbyhnyrs90z317r3A3LIhiUCia/dKdPM1vHA4mM9xhNtKISMsAplhDU=",
+      "allergies": "q+mcLv6G9mINteNFxTxAegX+M2ryZ5PrLqAB74s=",
+      "medications": "JUckXzvQdvTPThAlW3Oz+fmiVwjo2hP06Oc1M5rCE5lyCpM0RdPLg3RmQT0UGuEpd8+9MHJH9syCY7rX/PZWKpk1dsrVnH+wFmgOfBfeatq1LT+ZNwslOsp5gl1PUzcK74HCS7g6PXzBCULe2JYj6gWIyJVRXwebAdIL4V1SRX1O0vppet6LXxP7eJegzugH28ecSEMTS+sArfQacYeymaQHolndF+KJ7anUgS/3bNGu9gM/fkZ/6D9tQqr+PQ==",
+      "doctor_details": "TuEF7PTq06lNtEC0cGjczRArW7Qc+2lRV3cDq6E5nBruWNvHZIUTD0b61J4AVo/xa5mYzVZjlqy8lumTKJs=",
+      "emergency_contacts": "dq5pgYdKtG6gMFRAZyZym+6tRw1V8H2qhWbKLPVeSA5er27pX187FiO/jMPf/rmxzKkexE7lPKN3ZLcDZhfYUhLVxFYSpMh1CTe6UhvOUj+b+FrxxeTAjsHwZCqus6TM4qemNURfuJFpj7/tJDq7WGHZU5uLFfWQuGzf4K0ESpr5vWPuvUCIg0DiBYZuQlK7xr0EDmiueUqIJO5mTyAmVn2wkQmeTXHR9Cv/aBMv6Xc+Kzxc+1oDK6g6QZ4=",
+      "address": "3IIGF5uBBlqNCFlrRlwXbttVvkcAAUC79XWyLHtUbP1tn6Xf"
+    },
+    "caregiver_permissions": {
+      "1bb3fa65aa7a4f17": [
+        "full_name",
+        "hobbies",
+        "daily_routine",
+        "private_info"
+      ]
+    },
+    "created_at": "2026-10-14T12:45:43+00:00"
+  },
+  {
+    "id": "1bb3fa65aa7a4f17",
+    "email": "caregiver@memory.care",
+    "password_hash": "pbkdf2$260000$b377ba3235aeadd3c0f187e4ddf0b2de$4d8f98008934573bc07c1b518fce1f95b483ffae8c300055e921587a10178dca",
+    "pin_hash": null,
+    "role": "caregiver",
+    "profile": {
+      "full_name": "Priya Pendelton",
+      "preferred_name": "Priya",
+      "avatar_url": "",
+      "date_of_birth": "",
+      "language": "en",
+      "voice_preference": "female",
+      "hobbies": [],
+      "daily_routine": [],
+      "important_dates": [],
+      "personal_memories": []
+    },
+    "private": {},
+    "caregiver_permissions": {},
+    "created_at": "2026-10-14T12:45:43+00:00"
+  }
+]

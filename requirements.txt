@@ -13,6 +13,9 @@ TTS>=0.22.0
 soundfile>=0.12.1
 numpy>=1.26.0
 
+# Auth / Profile (stdlib only – no extra packages needed)
+# Uses: hashlib, hmac, secrets, json, pathlib (all stdlib)
+
 # Later phases (installed with the full file)
 chromadb>=0.5.0
 mediapipe>=0.10.14
