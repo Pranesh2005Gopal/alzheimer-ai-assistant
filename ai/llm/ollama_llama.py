@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 
 import httpx
 
@@ -10,14 +11,31 @@ from utils.config import Settings
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = """You are a calm, patient voice assistant for a person living with Alzheimer's disease.
-Speak in short, simple sentences. Be warm. Never diagnose medical conditions.
-Never invent medications, appointments, people, or times.
-If structured facts are provided, use only those facts.
-Do not tell the user to look at the screen. This conversation is spoken.
-Never say words like UNKNOWN, intent, DistilBERT, classifier, or pipeline.
-Never repeat internal labels. Speak as a caring person would speak.
+SYSTEM_PROMPT = """You are a calm voice companion for a person living with Alzheimer's disease.
+Speak in short, simple sentences. Be warm and patient. Never make them feel embarrassed.
+Never diagnose medical conditions. Never tell them to stop or change medication.
+Never invent family members, caregivers, doctors, appointments, medicines, or times.
+If application facts are provided for this question, use only those facts.
+Answer the patient's latest question directly.
+Do not mention conversation history, prompts, context, facts, or system labels.
+Never say UNKNOWN, intent, DistilBERT, classifier, or pipeline.
+If you do not have the information, say you do not have that information right now.
 """
+
+_INTERNAL_MARKERS = (
+    "conversation so far",
+    "patient:",
+    "assistant:",
+    "the patient's name is",
+    "facts you may use",
+    "how to answer",
+    "structured facts",
+    "known name:",
+    "intent was",
+    "distilbert",
+    "classifier",
+    "pipeline",
+)
 
 
 class OllamaLlama:
@@ -31,10 +49,14 @@ class OllamaLlama:
             messages.append(
                 {
                     "role": "system",
-                    "content": "Structured facts from the application (do not contradict these):\n" + facts,
+                    "content": (
+                        "Internal facts for this question only. "
+                        "Do not read this block aloud or mention that you were given facts.\n"
+                        + facts
+                    ),
                 }
             )
-        messages.extend(conversation[-6:])
+        messages.extend(conversation)
         messages.append({"role": "user", "content": user_text})
         try:
             response = httpx.post(
@@ -44,22 +66,53 @@ class OllamaLlama:
             )
             response.raise_for_status()
             content = response.json()["message"]["content"].strip()
-            return _patient_safe_speech(content, facts)
+            return patient_facing_speech(content, facts)
         except Exception as exc:
             logger.warning("Ollama/Llama 3 failed: %s", exc)
-            return _patient_safe_speech("", facts)
+            return patient_facing_speech("", facts)
 
 
-def _patient_safe_speech(content: str, facts: str) -> str:
-    lowered = content.lower()
-    banned = ("unknown", "intent was", "distilbert", "classifier", "pipeline")
-    if content and not any(word in lowered for word in banned):
-        return content
-    usable = [
-        line.strip()
-        for line in facts.splitlines()
-        if line.strip() and "unknown" not in line.lower() and "intent" not in line.lower()
-    ]
-    if usable:
-        return " ".join(usable[:4])
+def patient_facing_speech(content: str, facts: str) -> str:
+    cleaned = _strip_internal(content)
+    if cleaned and not _looks_internal(cleaned):
+        return cleaned
+    from_facts = _patient_sentence_from_facts(facts)
+    if from_facts:
+        return from_facts
     return "I am here with you. Please ask me again in a simple way."
+
+
+def _strip_internal(text: str) -> str:
+    if not text:
+        return ""
+    cut = re.split(r"\bconversation so far\b", text, flags=re.IGNORECASE)[0]
+    lines = []
+    for line in cut.splitlines():
+        lowered = line.strip().lower()
+        if not lowered:
+            continue
+        if lowered.startswith("patient:") or lowered.startswith("assistant:"):
+            continue
+        if any(marker in lowered for marker in _INTERNAL_MARKERS):
+            continue
+        lines.append(line.strip())
+    return " ".join(lines).strip()
+
+
+def _looks_internal(text: str) -> bool:
+    lowered = text.lower()
+    return any(marker in lowered for marker in _INTERNAL_MARKERS)
+
+
+def _patient_sentence_from_facts(facts: str) -> str:
+    for line in facts.splitlines():
+        item = line.strip()
+        if not item:
+            continue
+        if _looks_internal(item):
+            continue
+        if item.lower().startswith(("pending reminders", "medication:", "memory facts", "today's routine")):
+            continue
+        if len(item) > 4:
+            return item
+    return ""

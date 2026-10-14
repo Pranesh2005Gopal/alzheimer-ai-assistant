@@ -1,22 +1,44 @@
+import 'dart:async';
 import 'dart:io';
 
+import 'package:audioplayers/audioplayers.dart';
 import 'package:path_provider/path_provider.dart';
 
-/// Play assistant speech on Linux with ffplay/ffmpeg/paplay.
-/// audioplayers depends on GStreamer plugins that are often missing on Arch.
+import 'package:flutter/foundation.dart';
+
+/// Play assistant speech with system tools on Linux (ffplay/paplay/pw-play)
+/// or audioplayers on other platforms. Waits until playback finishes.
 class SpeechPlayer {
+  final AudioPlayer _audioPlayer = AudioPlayer();
+
   Future<void> playWav(List<int> audioBytes) async {
     if (audioBytes.length < 45) {
       return;
     }
+    
+    if (kIsWeb) {
+      await _audioPlayer.play(BytesSource(Uint8List.fromList(audioBytes)));
+      return;
+    }
+
     final dir = await getTemporaryDirectory();
     final file = File('${dir.path}/assistant_reply.wav');
     await file.writeAsBytes(audioBytes, flush: true);
     final played = await _playWithSystemTools(file.path);
     if (!played) {
-      throw StateError(
-        'Could not play speech. Install ffmpeg (ffplay) or paplay: pacman -S ffmpeg pulse-extra',
-      );
+      final done = Completer<void>();
+      final sub = _audioPlayer.onPlayerComplete.listen((_) {
+        if (!done.isCompleted) {
+          done.complete();
+        }
+      });
+      try {
+        await _audioPlayer.stop();
+        await _audioPlayer.play(DeviceFileSource(file.path));
+        await done.future.timeout(const Duration(minutes: 2), onTimeout: () {});
+      } finally {
+        await sub.cancel();
+      }
     }
   }
 
@@ -77,5 +99,7 @@ class SpeechPlayer {
     return '';
   }
 
-  Future<void> dispose() async {}
+  Future<void> dispose() async {
+    await _audioPlayer.dispose();
+  }
 }

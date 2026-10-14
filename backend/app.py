@@ -1,5 +1,6 @@
 from datetime import datetime
 
+import httpx
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -41,11 +42,22 @@ def root() -> dict:
 def health() -> dict:
     container = get_container()
     profile = container.repos.patient.get_profile()
+    llm_status = _ollama_status(container.settings.ollama_host)
+    assistant_status = "ready" if llm_status == "online" else "degraded"
     return {
         "ok": True,
+        "status": assistant_status,
         "phase": 1,
-        "patient": profile.preferred_name,
+        "patient": container.memory.patient_display_name() or profile.preferred_name,
         "time": datetime.now().isoformat(timespec="seconds"),
+        "services": {
+            "api": "online",
+            "llm": llm_status,
+            "stt": "configured",
+            "tts": "configured",
+            "nlu": "configured",
+            "vision": "configured",
+        },
         "stack": {
             "stt": "Whisper",
             "nlp": "spaCy",
@@ -56,3 +68,13 @@ def health() -> dict:
             "tts": "Coqui TTS",
         },
     }
+
+
+def _ollama_status(host: str) -> str:
+    try:
+        response = httpx.get(f"{host.rstrip('/')}/api/tags", timeout=1.5)
+        if response.status_code == 200:
+            return "online"
+        return "unavailable"
+    except Exception:
+        return "unavailable"

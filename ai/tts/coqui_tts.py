@@ -33,6 +33,8 @@ class CoquiTTS:
 
     def speak(self, text: str) -> bytes:
         spoken = _for_speech(text)
+        if not spoken:
+            return b""
         try:
             self.load()
             assert self._tts is not None
@@ -55,6 +57,17 @@ class CoquiTTS:
 def _for_speech(text: str) -> str:
     cleaned = re.sub(r"[*_`#]+", "", text)
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    lowered = cleaned.lower()
+    if any(
+        marker in lowered
+        for marker in (
+            "conversation so far",
+            "the patient's name is",
+            "facts you may use",
+            "how to answer",
+        )
+    ):
+        return ""
     if len(cleaned) > 400:
         cleaned = cleaned[:400].rsplit(" ", 1)[0]
-    return cleaned or "I am here with you."
+    return cleaned

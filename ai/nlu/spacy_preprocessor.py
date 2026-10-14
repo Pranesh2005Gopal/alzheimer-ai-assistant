@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 import spacy
 
 from models.nlu import SpacyDocumentView
@@ -35,12 +37,9 @@ class SpacyPreprocessor:
             if token[:1].isupper() and token.lower() not in {"i", "who", "what", "when", "where"}:
                 if token not in names:
                     names.append(token)
-        extra = []
-        lowered = text.lower()
-        for hint in ("arun", "priya", "kumar"):
-            if hint in lowered:
-                extra.append(hint.title() if hint != "kumar" else "Dr. Kumar")
-        for name in extra:
-            if name not in names:
-                names.append(name)
+        match = re.search(r"\bwho is\s+(?:my\s+)?([A-Za-z][A-Za-z.'\-]*)", text, flags=re.IGNORECASE)
+        if match:
+            token = match.group(1).strip()
+            if token.lower() not in {"my", "the", "this", "that", "a", "an"} and token not in names:
+                names.append(token)
         return names

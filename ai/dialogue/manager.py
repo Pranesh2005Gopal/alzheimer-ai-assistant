@@ -7,6 +7,7 @@ Those mutations go through application services only.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -29,10 +30,15 @@ _READ_INTENTS = {
 }
 
 
+_ACK_PHRASES = {"done", "yes", "ok", "okay", "i did", "i took it", "got it"}
+
+
 @dataclass
 class DialogueState:
     awaiting_emergency_confirm: bool = False
     awaiting_medication_done: bool = False
+    awaiting_reminder_ack: bool = False
+    active_reminder_id: str | None = None
     last_intent: Intent | None = None
 
 
@@ -61,24 +67,62 @@ class DialogueManager:
 
     def handle(self, nlu: NLUResult) -> DialogueDecision:
         text = nlu.normalized_text
-        lowered = text.lower().strip()
+        lowered = re.sub(r"[.!?]+$", "", text.lower().strip()).strip()
+
+        self._remember_from_speech(text)
 
         if self.state.awaiting_emergency_confirm:
             return self._finish_emergency_confirm(lowered)
 
-        if self.state.awaiting_medication_done and lowered in {"done", "yes", "i did", "i took it"}:
+        if self.state.awaiting_reminder_ack:
+            snooze = self._snooze_decision(nlu, lowered)
+            if snooze is not None:
+                return snooze
+            if lowered in _ACK_PHRASES:
+                reminder = self.reminders.complete_active()
+                self.state.awaiting_reminder_ack = False
+                self.state.active_reminder_id = None
+                self.state.awaiting_medication_done = False
+                fact = (
+                    "Okay. I've marked your reminder as completed."
+                    if reminder
+                    else "I could not find that reminder."
+                )
+                return DialogueDecision(
+                    user_prompt_for_llm="Say the facts below in the same words.",
+                    facts=fact,
+                    mutated=bool(reminder),
+                    extras={"verbatim": True},
+                )
+
+        if self.state.awaiting_medication_done and lowered in _ACK_PHRASES:
             reminder = self.reminders.mark_next_medication_done()
             self.state.awaiting_medication_done = False
-            fact = "Medication marked as taken." if reminder else "I could not find a pending medication."
+            fact = "Okay. I've marked your reminder as completed." if reminder else "I could not find a pending medication."
             return DialogueDecision(
-                user_prompt_for_llm="The patient said they finished their medication. Reassure them briefly.",
+                user_prompt_for_llm="Say the facts below in the same words.",
                 facts=fact,
                 mutated=True,
+                extras={"verbatim": True},
             )
 
         intent = nlu.intent
         if intent == Intent.UNKNOWN:
             intent = self._recover_intent(nlu)
+            nlu = nlu.model_copy(update={"intent": intent})
+        if self._looks_like_person_query(nlu.normalized_text) and intent in {
+            Intent.UNKNOWN,
+            Intent.ASK_MEMORY,
+            Intent.GENERAL_CONVERSATION,
+        }:
+            intent = Intent.ASK_PERSON_IDENTITY
+            nlu = nlu.model_copy(update={"intent": intent})
+        if self._looks_like_create_reminder(nlu.normalized_text) and intent in {
+            Intent.UNKNOWN,
+            Intent.GENERAL_CONVERSATION,
+            Intent.CHECK_REMINDER,
+        }:
+            intent = Intent.CREATE_REMINDER
             nlu = nlu.model_copy(update={"intent": intent})
         self.state.last_intent = intent
 
@@ -145,9 +189,11 @@ class DialogueManager:
     def _intents_hinted_in_text(self, text: str) -> list[Intent]:
         lowered = text.lower()
         found: list[Intent] = []
-        if MemoryService._is_self_question(lowered):
+        if MemoryService._is_self_question(lowered) or MemoryService._is_family_list_question(lowered):
             found.append(Intent.ASK_PERSON_IDENTITY)
-        if "appointment" in lowered or "doctor" in lowered or "clinic" in lowered:
+        if "who is my" in lowered:
+            found.append(Intent.ASK_PERSON_IDENTITY)
+        if "appointment" in lowered or "clinic" in lowered or ("doctor" in lowered and "who" not in lowered):
             found.append(Intent.CHECK_APPOINTMENT)
         if "medicine" in lowered or "medication" in lowered or "tablet" in lowered:
             found.append(Intent.CHECK_MEDICATION)
@@ -155,9 +201,13 @@ class DialogueManager:
 
     def _recover_intent(self, nlu: NLUResult) -> Intent:
         text = nlu.normalized_text.lower()
-        if MemoryService._is_self_question(text) or "who is" in text:
+        if MemoryService._is_self_question(text) or MemoryService._is_family_list_question(text):
             return Intent.ASK_PERSON_IDENTITY
-        if "appointment" in text or "doctor" in text or "clinic" in text:
+        if "who is my" in text or text.strip().startswith("who is") or self._looks_like_person_query(text):
+            return Intent.ASK_PERSON_IDENTITY
+        if self._looks_like_create_reminder(text):
+            return Intent.CREATE_REMINDER
+        if "appointment" in text or "clinic" in text or ("doctor" in text and "who" not in text):
             return Intent.CHECK_APPOINTMENT
         if "medicine" in text or "medication" in text or "tablet" in text or "pill" in text:
             return Intent.CHECK_MEDICATION
@@ -173,17 +223,48 @@ class DialogueManager:
 
     def _time_from_duckling(self, nlu: NLUResult) -> str | None:
         for item in nlu.temporal:
-            if item.value:
-                return str(item.value)
+            value = item.value
+            if isinstance(value, dict):
+                inner = value.get("value")
+                if isinstance(inner, str) and inner.strip():
+                    return inner.strip()
+                continue
+            if value:
+                return str(value)
         return None
 
     def _create_reminder(self, nlu: NLUResult) -> DialogueDecision:
+        if self.state.awaiting_reminder_ack:
+            snooze = self._snooze_decision(nlu, nlu.normalized_text.lower())
+            if snooze is not None:
+                return snooze
         when = self._time_from_duckling(nlu)
+        
+        # Manually extract task and clock to check if they are valid
+        from services.reminder_manager import _clock_from_text, _extract_task
+        task = _extract_task(nlu.normalized_text)
+        time_iso = when or _clock_from_text(nlu.normalized_text) or "unspecified"
+        
+        if time_iso == "unspecified":
+            return DialogueDecision(
+                user_prompt_for_llm="Say the facts below in the same words.",
+                facts="What time should I remind you?",
+                extras={"verbatim": True},
+            )
+        
+        if not task or task.lower() == "your reminder":
+            return DialogueDecision(
+                user_prompt_for_llm="Say the facts below in the same words.",
+                facts="What would you like me to remind you about?",
+                extras={"verbatim": True},
+            )
+
         reminder = self.reminders.create_from_utterance(nlu.normalized_text, when)
         return DialogueDecision(
-            user_prompt_for_llm="Confirm the reminder in one or two short spoken sentences.",
-            facts=f"Reminder created: {reminder.title} at {reminder.time_iso} ({reminder.kind.value}).",
+            user_prompt_for_llm="Say the confirmation below in the same words.",
+            facts=self.reminders.spoken_created(reminder),
             mutated=True,
+            extras={"verbatim": True},
         )
 
     def _delete_reminder(self, nlu: NLUResult) -> DialogueDecision:
@@ -228,8 +309,9 @@ class DialogueManager:
 
     def _ask_person(self, nlu: NLUResult) -> DialogueDecision:
         return DialogueDecision(
-            user_prompt_for_llm="Identify the person using only the facts. If unknown, say you are not sure.",
+            user_prompt_for_llm="Say the facts below to the patient in the same words. Do not add extra people.",
             facts=self.memory.identify(nlu),
+            extras={"verbatim": True},
         )
 
     def _ask_memory(self, nlu: NLUResult) -> DialogueDecision:
@@ -299,8 +381,13 @@ class DialogueManager:
 
     def _chat(self, nlu: NLUResult) -> DialogueDecision:
         return DialogueDecision(
-            user_prompt_for_llm=nlu.normalized_text,
-            facts="No application data changed. This is general conversation. Be a kind companion.",
+            user_prompt_for_llm=(
+                "Reply to what the patient just said. Stay on that topic. "
+                "If they repeat a question, give the same simple answer. "
+                "Do not mention medicine, appointments, or family unless they asked. "
+                "Never mention conversation history."
+            ),
+            facts="",
         )
 
     def _unknown(self, nlu: NLUResult) -> DialogueDecision:
@@ -318,18 +405,131 @@ class DialogueManager:
                 Intent.CHECK_DATE: self._check_date,
             }
             return routers[recovered](nlu)
-        overview = "\n".join(
-            [
-                self.memory.spoken_self(),
-                self.appointments.spoken_next(),
-                self.reminders.spoken_list(),
-            ]
-        )
         return DialogueDecision(
             user_prompt_for_llm=(
-                "You did not fully understand. Still help using the facts below. "
-                "Speak simply. Never say UNKNOWN, intent, or classifier."
+                "Answer what the patient just said as a kind companion. "
+                "Do not list medicine or appointments unless they asked. "
+                "Never mention conversation history. Never say UNKNOWN, intent, or classifier."
             ),
-            facts=overview,
+            facts="",
             status="unknown",
         )
+
+    def note_reminder_alert(self, reminder_id: str) -> None:
+        self.state.awaiting_reminder_ack = True
+        self.state.active_reminder_id = reminder_id
+        self.state.awaiting_medication_done = True
+        self.reminders.set_active(reminder_id)
+
+    def _looks_like_person_query(self, text: str) -> bool:
+        lowered = text.lower()
+        return lowered.startswith("who is") or "who is" in lowered or "tell me who" in lowered
+
+    def _looks_like_create_reminder(self, text: str) -> bool:
+        lowered = text.lower()
+        if "remind me again" in lowered or "snooze" in lowered:
+            return False
+        return bool(re.search(r"\b(remind me|a reminder)\b", lowered)) and any(
+            token in lowered for token in (" to ", " at ", " for ")
+        )
+
+    def _snooze_decision(self, nlu: NLUResult, lowered: str) -> DialogueDecision | None:
+        minutes = _snooze_minutes(nlu, lowered)
+        if minutes is None:
+            return None
+        reminder = self.reminders.snooze_active(minutes)
+        self.state.awaiting_reminder_ack = False
+        self.state.active_reminder_id = None
+        if reminder is None:
+            return DialogueDecision(
+                user_prompt_for_llm="Say the facts below in the same words.",
+                facts="I could not find that reminder.",
+                extras={"verbatim": True},
+            )
+        return DialogueDecision(
+            user_prompt_for_llm="Say the confirmation below in the same words.",
+            facts=f"Okay, I'll remind you again in {minutes} minutes.",
+            mutated=True,
+            extras={"verbatim": True},
+        )
+
+    def _remember_from_speech(self, text: str) -> None:
+        name = _extract_spoken_name(text)
+        if name:
+            self.memory.set_preferred_name(name)
+
+
+_NOT_NAMES = {
+    "tired",
+    "hungry",
+    "sick",
+    "lost",
+    "fine",
+    "okay",
+    "scared",
+    "confused",
+    "here",
+    "ready",
+    "done",
+    "sorry",
+    "home",
+    "alone",
+    "worried",
+    "sad",
+    "happy",
+    "ok",
+    "good",
+    "cold",
+    "hot",
+    "back",
+    "going",
+}
+
+
+def _snooze_minutes(nlu: NLUResult, lowered: str) -> int | None:
+    again = "remind me again" in lowered or "snooze" in lowered
+    match = re.search(r"\b(?:in|for)\s+(\d+)\s*(minutes?|mins?|hours?|hrs?)\b", lowered)
+    if match:
+        amount = int(match.group(1))
+        unit = match.group(2)
+        minutes = amount * 60 if unit.startswith("hour") or unit.startswith("hr") else amount
+        return minutes
+    for item in nlu.temporal:
+        if item.dim != "duration":
+            continue
+        value = item.value
+        if isinstance(value, dict):
+            unit = str(value.get("unit") or "").lower()
+            amount = value.get("value")
+            normalized = value.get("normalized") or {}
+            if isinstance(normalized, dict) and normalized.get("unit") == "second":
+                try:
+                    return max(1, int(float(normalized["value"]) // 60))
+                except (TypeError, ValueError):
+                    pass
+            if isinstance(amount, (int, float)):
+                if unit.startswith("hour"):
+                    return int(amount * 60)
+                if unit.startswith("min"):
+                    return int(amount)
+    if again:
+        return 10
+    return None
+
+
+def _extract_spoken_name(text: str) -> str | None:
+    patterns = (
+        r"\bmy name is ([A-Za-z][A-Za-z'\-]{1,30})\b",
+        r"\bcall me ([A-Za-z][A-Za-z'\-]{1,30})\b",
+        r"\bi am ([A-Za-z][A-Za-z'\-]{1,30})\b",
+        r"\bi'm ([A-Za-z][A-Za-z'\-]{1,30})\b",
+    )
+    for pattern in patterns:
+        match = re.search(pattern, text.strip(), flags=re.IGNORECASE)
+        if not match:
+            continue
+        name = match.group(1).strip()
+        if name.lower() in _NOT_NAMES:
+            continue
+        return name
+    return None

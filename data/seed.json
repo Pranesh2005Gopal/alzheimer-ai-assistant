@@ -14,6 +14,20 @@
       "face_embedding": []
     },
     {
+      "id": "person-raju",
+      "name": "Raju",
+      "relationship": "son",
+      "notes": "Your son.",
+      "face_embedding": []
+    },
+    {
+      "id": "person-ram",
+      "name": "Ram",
+      "relationship": "brother",
+      "notes": "Your brother.",
+      "face_embedding": []
+    },
+    {
       "id": "person-priya",
       "name": "Priya",
       "relationship": "daughter",

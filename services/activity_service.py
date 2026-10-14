@@ -10,7 +10,7 @@ from repositories.in_memory import InMemoryActivityRepository
 class ConversationHistory:
     """Short-lived turns. Not the same as long-term MemoryRepository / Chroma."""
 
-    def __init__(self, max_turns: int = 12) -> None:
+    def __init__(self, max_turns: int = 40) -> None:
         self.max_turns = max_turns
         self._turns: list[ConversationTurn] = []
 
@@ -28,6 +28,20 @@ class ConversationHistory:
     def as_llm_messages(self) -> list[dict[str, str]]:
         role_map = {"patient": "user", "assistant": "assistant"}
         return [{"role": role_map.get(t.role, t.role), "content": t.text} for t in self._turns]
+
+    def as_digest(self) -> str:
+        if not self._turns:
+            return ""
+        lines = []
+        for turn in self._turns:
+            who = "Patient" if turn.role == "patient" else "Assistant"
+            lines.append(f"{who}: {turn.text}")
+        return "Conversation so far:\n" + "\n".join(lines)
+
+    def recent(self, limit: int = 40) -> list[ConversationTurn]:
+        if limit <= 0:
+            return []
+        return list(self._turns[-limit:])
 
 
 class ActivityLogger:

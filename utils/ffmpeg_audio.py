@@ -1,4 +1,4 @@
-"""Convert any uploaded/recorded audio into 16 kHz mono WAV for Whisper and speakers."""
+"""Convert and loudness-boost recordings so Whisper can hear quiet speech."""
 
 from __future__ import annotations
 
@@ -16,23 +16,38 @@ def ffmpeg_available() -> bool:
     return shutil.which("ffmpeg") is not None
 
 
-def to_pcm16_wav(source: Path, sample_rate: int = 16000) -> Path:
-    """Write a new 16-bit PCM WAV. Whisper and Linux players both accept this format."""
+def to_pcm16_wav(source: Path, sample_rate: int = 16000, enhance: bool = True) -> Path:
+    """16 kHz mono PCM WAV. Set enhance=True for microphone speech."""
     if not ffmpeg_available():
         logger.warning("ffmpeg is not on PATH; Whisper may fail on unusual recordings")
         return source
     dest = _temp_path(".pcm16.wav")
+    filters = (
+        f"highpass=f=70,lowpass=f=8000,aresample={sample_rate},"
+        "acompressor=threshold=0.06:ratio=9:attack=5:release=80,"
+        "dynaudnorm=f=75:g=25:p=0.95,volume=8dB"
+        if enhance
+        else f"aresample={sample_rate}"
+    )
     attempts = [
-        ["ffmpeg", "-y", "-i", str(source), "-ac", "1", "-ar", str(sample_rate), "-c:a", "pcm_s16le", str(dest)],
         [
             "ffmpeg",
             "-y",
-            "-f",
-            "s16le",
-            "-ar",
-            "16000",
+            "-i",
+            str(source),
             "-ac",
             "1",
+            "-ar",
+            str(sample_rate),
+            "-af",
+            filters,
+            "-c:a",
+            "pcm_s16le",
+            str(dest),
+        ],
+        [
+            "ffmpeg",
+            "-y",
             "-i",
             str(source),
             "-ac",
@@ -50,7 +65,7 @@ def to_pcm16_wav(source: Path, sample_rate: int = 16000) -> Path:
             if dest.stat().st_size > 44:
                 return dest
         except Exception:
-            logger.debug("ffmpeg attempt failed for %s", command[:6])
+            logger.debug("ffmpeg attempt failed for %s", command[:8])
     dest.unlink(missing_ok=True)
     logger.warning("ffmpeg could not convert %s", source)
     return source
@@ -64,7 +79,7 @@ def wav_bytes_pcm16(data: bytes, sample_rate: int = 22050) -> bytes:
     converted: Path | None = None
     try:
         src.write_bytes(data)
-        converted = to_pcm16_wav(src, sample_rate=sample_rate)
+        converted = to_pcm16_wav(src, sample_rate=sample_rate, enhance=False)
         if converted == src:
             return data
         return converted.read_bytes()

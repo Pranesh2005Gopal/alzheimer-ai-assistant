@@ -1,30 +1,56 @@
 import 'package:flutter/material.dart';
 
-import 'screens/patient_home_screen.dart';
-import 'theme/app_colors.dart';
+import 'screens/app_shell.dart';
+import 'settings/app_settings.dart';
+import 'state/assistant_controller.dart';
+import 'theme/app_theme.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const PatientAssistantApp());
+  final settings = await AppSettings.load();
+  final controller = AssistantController(settings: settings);
+  runApp(PatientAssistantApp(controller: controller));
 }
 
-class PatientAssistantApp extends StatelessWidget {
-  const PatientAssistantApp({super.key});
+class PatientAssistantApp extends StatefulWidget {
+  const PatientAssistantApp({super.key, required this.controller});
+
+  final AssistantController controller;
+
+  @override
+  State<PatientAssistantApp> createState() => _PatientAssistantAppState();
+}
+
+class _PatientAssistantAppState extends State<PatientAssistantApp> {
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.start();
+  }
+
+  @override
+  void dispose() {
+    widget.controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Voice Assistant',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        scaffoldBackgroundColor: AppColors.background,
-        colorScheme: const ColorScheme.dark(
-          primary: AppColors.talk,
-          surface: AppColors.card,
-        ),
-      ),
-      home: const PatientHomeScreen(),
+    return ListenableBuilder(
+      listenable: widget.controller,
+      builder: (context, _) {
+        return AssistantScope(
+          controller: widget.controller,
+          child: MaterialApp(
+            title: 'AI Memory Care',
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.light(),
+            darkTheme: AppTheme.dark(),
+            themeMode: widget.controller.themeMode,
+            home: const AppShell(),
+          ),
+        );
+      },
     );
   }
 }

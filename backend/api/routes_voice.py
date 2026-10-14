@@ -4,7 +4,7 @@ import base64
 import tempfile
 from pathlib import Path
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, UploadFile
 
 from backend.container import get_container
 
@@ -18,17 +18,21 @@ async def voice_turn(audio: UploadFile = File(...)) -> dict:
     Whisper → spaCy + DistilBERT + Duckling → Dialogue Manager → Llama 3 → Coqui TTS
     """
     suffix = Path(audio.filename or "speech.wav").suffix or ".wav"
+    if suffix.lower() not in {".wav", ".pcm", ".flac", ".ogg", ".mp3", ".m4a"}:
+        suffix = ".wav"
     data = await audio.read()
-    if not data or len(data) < 500:
-        raise HTTPException(status_code=400, detail="Audio recording was empty. Hold TALK and speak, then press STOP.")
-    handle = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
-    path = Path(handle.name)
-    try:
-        handle.write(data)
-        handle.close()
-        result = get_container().pipeline.run_audio_file(path)
-    finally:
-        path.unlink(missing_ok=True)
+    container = get_container()
+    if not data or len(data) < 100:
+        result = container.pipeline.unheard_reply()
+    else:
+        handle = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
+        path = Path(handle.name)
+        try:
+            handle.write(data)
+            handle.close()
+            result = container.pipeline.run_audio_file(path)
+        finally:
+            path.unlink(missing_ok=True)
     return {
         "transcript": result.transcript,
         "intent": result.intent,

@@ -8,6 +8,7 @@ from ai.memory.chroma_store import NullSemanticMemory
 from ai.nlu.pipeline import NLUPipeline
 from ai.stt.whisper_stt import WhisperSTT
 from ai.tts.coqui_tts import CoquiTTS
+from ai.vision.recognizer import FaceRecognizer
 from repositories.in_memory import RepositoryBundle, load_seed
 from services.activity_service import ActivityLogger, ConversationHistory
 from services.appointment_service import AppointmentService
@@ -29,6 +30,7 @@ class AppContainer:
         # Phase 3 replaces NullSemanticMemory with ChromaSemanticMemory.
         self.memory = MemoryService(self.repos.memory, NullSemanticMemory())
         self.emergency = EmergencyService(self.repos.activity)
+        self.recognizer = FaceRecognizer(self.repos.memory)
         self.dialogue = DialogueManager(
             reminders=self.reminders,
             appointments=self.appointments,
