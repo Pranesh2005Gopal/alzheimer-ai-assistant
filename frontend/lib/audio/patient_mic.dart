@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 
@@ -18,7 +19,7 @@ class PatientMic {
 
   Future<void> start({required String path, void Function(String status)? onLevel}) async {
     _usingSystem = false;
-    if (Platform.isLinux) {
+    if (!kIsWeb && Platform.isLinux) {
       final started = await _startLinux(path);
       if (started) {
         onLevel?.call('Listening — you can pause. Press STOP when you are finished.');
@@ -33,7 +34,7 @@ class PatientMic {
         sampleRate: 16000,
         bitRate: 256000,
         device: device,
-        autoGain: Platform.isAndroid || Platform.isIOS,
+        autoGain: !kIsWeb && (Platform.isAndroid || Platform.isIOS),
         echoCancel: false,
         noiseSuppress: false,
       ),
@@ -267,6 +268,9 @@ class PatientMic {
 }
 
 Future<String> recordingPath() async {
+  if (kIsWeb) {
+    return 'patient_turn_${DateTime.now().millisecondsSinceEpoch}.wav';
+  }
   final dir = await getTemporaryDirectory();
   return '${dir.path}/patient_turn_${DateTime.now().millisecondsSinceEpoch}.wav';
 }

@@ -46,6 +46,16 @@ class InMemoryMemoryRepository:
         self._people[person.id] = person
         return person
 
+    def get_person(self, person_id: str) -> Optional[Person]:
+        return self._people.get(person_id)
+
+    def update_person(self, person: Person) -> Person:
+        self._people[person.id] = person
+        return person
+
+    def delete_person(self, person_id: str) -> bool:
+        return self._people.pop(person_id, None) is not None
+
     def list_important_dates(self) -> list[ImportantDate]:
         return list(self._dates.values())
 

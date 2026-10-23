@@ -10,39 +10,65 @@ import 'package:flutter/foundation.dart';
 /// or audioplayers on other platforms. Waits until playback finishes.
 class SpeechPlayer {
   final AudioPlayer _audioPlayer = AudioPlayer();
+  Completer<void>? _activeCompleter;
+  StreamSubscription? _completeSub;
+  StreamSubscription? _stateSub;
 
   Future<void> playWav(List<int> audioBytes) async {
     if (audioBytes.length < 45) {
       return;
     }
-    
-    if (kIsWeb) {
-      await _audioPlayer.play(BytesSource(Uint8List.fromList(audioBytes)));
-      return;
+    await stop();
+
+    final completer = Completer<void>();
+    _activeCompleter = completer;
+
+    void finish() {
+      if (!completer.isCompleted) {
+        completer.complete();
+      }
     }
 
-    final dir = await getTemporaryDirectory();
-    final file = File('${dir.path}/assistant_reply.wav');
-    await file.writeAsBytes(audioBytes, flush: true);
-    final played = await _playWithSystemTools(file.path);
-    if (!played) {
-      final done = Completer<void>();
-      final sub = _audioPlayer.onPlayerComplete.listen((_) {
-        if (!done.isCompleted) {
-          done.complete();
-        }
-      });
-      try {
-        await _audioPlayer.stop();
+    _completeSub = _audioPlayer.onPlayerComplete.listen((_) => finish());
+    _stateSub = _audioPlayer.onPlayerStateChanged.listen((state) {
+      if (state == PlayerState.completed || state == PlayerState.stopped) {
+        finish();
+      }
+    });
+
+    try {
+      if (kIsWeb) {
+        debugPrint('[SpeechPlayer] Playing ${audioBytes.length} audio bytes in browser');
+        await _audioPlayer.play(BytesSource(Uint8List.fromList(audioBytes)));
+        await completer.future.timeout(const Duration(seconds: 45), onTimeout: () {});
+        return;
+      }
+
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/assistant_reply.wav');
+      await file.writeAsBytes(audioBytes, flush: true);
+      final played = await _playWithSystemTools(file.path);
+      if (!played) {
+        debugPrint('[SpeechPlayer] Playing via AudioPlayer device file fallback');
         await _audioPlayer.play(DeviceFileSource(file.path));
-        await done.future.timeout(const Duration(minutes: 2), onTimeout: () {});
-      } finally {
-        await sub.cancel();
+        await completer.future.timeout(const Duration(seconds: 45), onTimeout: () {});
+      }
+    } catch (e) {
+      debugPrint('[SpeechPlayer] Playback error: $e');
+      rethrow;
+    } finally {
+      await _completeSub?.cancel();
+      await _stateSub?.cancel();
+      _completeSub = null;
+      _stateSub = null;
+      if (_activeCompleter == completer) {
+        _activeCompleter = null;
       }
     }
   }
 
   Future<bool> _playWithSystemTools(String path) async {
+    if (kIsWeb) return false;
     final attempts = <List<String>>[
       [_bin('ffplay'), '-nodisp', '-autoexit', '-loglevel', 'quiet', path],
       [_bin('paplay'), path],
@@ -79,6 +105,7 @@ class SpeechPlayer {
   }
 
   static String _bin(String name) {
+    if (kIsWeb) return '';
     const dirs = ['/usr/bin', '/usr/local/bin', '/bin'];
     for (final dir in dirs) {
       final file = File('$dir/$name');
@@ -99,7 +126,22 @@ class SpeechPlayer {
     return '';
   }
 
+  Future<void> stop() async {
+    try {
+      if (_activeCompleter != null && !_activeCompleter!.isCompleted) {
+        _activeCompleter!.complete();
+      }
+      _activeCompleter = null;
+      await _completeSub?.cancel();
+      await _stateSub?.cancel();
+      _completeSub = null;
+      _stateSub = null;
+      await _audioPlayer.stop();
+    } catch (_) {}
+  }
+
   Future<void> dispose() async {
+    await stop();
     await _audioPlayer.dispose();
   }
 }

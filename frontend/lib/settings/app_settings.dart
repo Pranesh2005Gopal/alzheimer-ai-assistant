@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -15,15 +16,23 @@ class AppSettings {
   String apiBase;
   ThemeMode themeMode;
 
-  static Future<File> _file() async {
-    final dir = await getApplicationDocumentsDirectory();
-    return File('${dir.path}/assistant_settings.json');
+  static Future<File?> _file() async {
+    if (kIsWeb) return null;
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      return File('${dir.path}/assistant_settings.json');
+    } catch (_) {
+      return null;
+    }
   }
 
   static Future<AppSettings> load() async {
+    if (kIsWeb) {
+      return AppSettings(apiBase: AssistantApi.defaultBase());
+    }
     try {
       final file = await _file();
-      if (!file.existsSync()) {
+      if (file == null || !file.existsSync()) {
         return AppSettings(apiBase: AssistantApi.defaultBase());
       }
       final data = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
@@ -37,13 +46,17 @@ class AppSettings {
   }
 
   Future<void> save() async {
-    final file = await _file();
-    await file.writeAsString(
-      jsonEncode({
-        'api_base': apiBase,
-        'theme_mode': themeMode.name,
-      }),
-    );
+    if (kIsWeb) return;
+    try {
+      final file = await _file();
+      if (file == null) return;
+      await file.writeAsString(
+        jsonEncode({
+          'api_base': apiBase,
+          'theme_mode': themeMode.name,
+        }),
+      );
+    } catch (_) {}
   }
 
   static ThemeMode _themeFrom(String? value) {

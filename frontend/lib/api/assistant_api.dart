@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../models/care_models.dart';
@@ -43,7 +43,7 @@ class AssistantApi {
     if (fromEnv.isNotEmpty) {
       return fromEnv;
     }
-    if (Platform.isAndroid) {
+    if (!kIsWeb && Platform.isAndroid) {
       return 'http://10.0.2.2:8080';
     }
     return 'http://127.0.0.1:8080';
@@ -78,9 +78,13 @@ class AssistantApi {
   }
 
   Future<VoiceTurn> sendAudio(File wavFile) async {
+    return sendAudioBytes(await wavFile.readAsBytes());
+  }
+
+  Future<VoiceTurn> sendAudioBytes(List<int> bytes) async {
     final request = http.MultipartRequest('POST', Uri.parse('$baseUrl/v1/voice/turn'));
     request.files.add(
-      await http.MultipartFile.fromPath('audio', wavFile.path, filename: 'speech.wav'),
+      http.MultipartFile.fromBytes('audio', bytes, filename: 'speech.wav'),
     );
     return _sendMultipart(request, 'Voice turn', VoiceTurn.fromJson);
   }
@@ -131,15 +135,84 @@ class AssistantApi {
     required String name,
     String personId = '',
     String relationship = '',
+    String notes = '',
   }) async {
     final request = http.MultipartRequest('POST', Uri.parse('$baseUrl/v1/vision/register'));
     request.fields['name'] = name;
     request.fields['relationship'] = relationship;
+    request.fields['notes'] = notes;
     request.fields['person_id'] = personId;
     request.files.add(
       http.MultipartFile.fromBytes('image', imageBytes, filename: 'face.jpg'),
     );
     return _sendMultipart(request, 'Face registration', FaceRecognitionResult.fromJson);
+  }
+
+  Future<KnownPerson> createPerson({
+    required String name,
+    required String relationship,
+    String notes = '',
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/v1/vision/people'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'name': name, 'relationship': relationship, 'notes': notes}),
+    );
+    if (response.statusCode != 200) {
+      throw HttpException('Could not create person (${response.statusCode}): ${response.body}');
+    }
+    return KnownPerson.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  Future<KnownPerson> updatePerson({
+    required String id,
+    required String name,
+    required String relationship,
+    String notes = '',
+  }) async {
+    final response = await http.put(
+      Uri.parse('$baseUrl/v1/vision/people/$id'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'name': name, 'relationship': relationship, 'notes': notes}),
+    );
+    if (response.statusCode != 200) {
+      throw HttpException('Could not update person (${response.statusCode}): ${response.body}');
+    }
+    return KnownPerson.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  Future<void> deletePerson(String id) async {
+    final response = await http.delete(Uri.parse('$baseUrl/v1/vision/people/$id'));
+    if (response.statusCode != 200) {
+      throw HttpException('Could not delete person (${response.statusCode}): ${response.body}');
+    }
+  }
+
+  Future<void> deletePersonFace(String id) async {
+    final response = await http.delete(Uri.parse('$baseUrl/v1/vision/people/$id/face'));
+    if (response.statusCode != 200) {
+      throw HttpException('Could not remove face (${response.statusCode}): ${response.body}');
+    }
+  }
+
+  Future<FaceRecognitionResult> registerFaceMultiSample({
+    required List<List<int>> imagesBytesList,
+    required String name,
+    String personId = '',
+    String relationship = '',
+    String notes = '',
+  }) async {
+    final request = http.MultipartRequest('POST', Uri.parse('$baseUrl/v1/vision/register-samples'));
+    request.fields['name'] = name;
+    request.fields['relationship'] = relationship;
+    request.fields['notes'] = notes;
+    request.fields['person_id'] = personId;
+    for (int i = 0; i < imagesBytesList.length; i++) {
+      request.files.add(
+        http.MultipartFile.fromBytes('images', imagesBytesList[i], filename: 'face_$i.jpg'),
+      );
+    }
+    return _sendMultipart(request, 'Multi-sample face registration', FaceRecognitionResult.fromJson);
   }
 
   Future<List<ReminderItem>> listReminders() async {
@@ -308,12 +381,14 @@ class KnownPerson {
     required this.name,
     required this.relationship,
     required this.hasFaceProfile,
+    this.notes = '',
   });
 
   final String id;
   final String name;
   final String relationship;
   final bool hasFaceProfile;
+  final String notes;
 
   factory KnownPerson.fromJson(Map<String, dynamic> json) {
     return KnownPerson(
@@ -321,6 +396,7 @@ class KnownPerson {
       name: json['name'] as String? ?? '',
       relationship: json['relationship'] as String? ?? '',
       hasFaceProfile: json['has_face_profile'] as bool? ?? false,
+      notes: json['notes'] as String? ?? '',
     );
   }
 }

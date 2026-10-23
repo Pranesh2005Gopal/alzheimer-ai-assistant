@@ -51,23 +51,30 @@ class AuthApi {
   // Persistence helpers
   // ---------------------------------------------------------------------------
 
-  static Future<File> _tokenFile() async {
-    final dir = await getApplicationDocumentsDirectory();
-    return File('${dir.path}/auth_token.txt');
+  static Future<File?> _tokenFile() async {
+    if (kIsWeb) return null;
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      return File('${dir.path}/auth_token.txt');
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<void> saveToken(String token) async {
     _token = token;
+    if (kIsWeb) return;
     try {
       final f = await _tokenFile();
-      await f.writeAsString(token);
+      if (f != null) await f.writeAsString(token);
     } catch (_) {}
   }
 
   Future<bool> loadSavedToken() async {
+    if (kIsWeb) return false;
     try {
       final f = await _tokenFile();
-      if (await f.exists()) {
+      if (f != null && await f.exists()) {
         final t = (await f.readAsString()).trim();
         if (t.isNotEmpty) {
           _token = t;
@@ -81,9 +88,10 @@ class AuthApi {
   Future<void> clearToken() async {
     _token = null;
     _privateGrant = null;
+    if (kIsWeb) return;
     try {
       final f = await _tokenFile();
-      if (await f.exists()) await f.delete();
+      if (f != null && await f.exists()) await f.delete();
     } catch (_) {}
   }
 

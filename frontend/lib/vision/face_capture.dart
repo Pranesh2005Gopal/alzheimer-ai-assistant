@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -22,6 +23,12 @@ class FaceCapture {
   final ImagePicker _picker;
 
   Future<CameraSnapshot> probe() async {
+    if (kIsWeb) {
+      return CameraSnapshot(
+        availability: CameraAvailability.available,
+        detail: 'Web camera capture available.',
+      );
+    }
     if (Platform.isAndroid || Platform.isIOS) {
       final status = await Permission.camera.status;
       if (status.isDenied || status.isRestricted) {
@@ -69,6 +76,11 @@ class FaceCapture {
   }
 
   Future<File?> capturePhoto() async {
+    if (kIsWeb) {
+      final picked = await _picker.pickImage(source: ImageSource.camera, imageQuality: 85, maxWidth: 1280);
+      if (picked == null) return null;
+      return null;
+    }
     if (Platform.isAndroid || Platform.isIOS) {
       final permission = await Permission.camera.request();
       if (!permission.isGranted) {

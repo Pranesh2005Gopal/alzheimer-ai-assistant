@@ -64,10 +64,12 @@ class HealthStatus {
 }
 
 class ChatLine {
-  ChatLine({required this.fromYou, required this.text, DateTime? at}) : at = at ?? DateTime.now();
+  ChatLine({required this.fromYou, required this.text, this.audioBytes, DateTime? at})
+      : at = at ?? DateTime.now();
 
   final bool fromYou;
   final String text;
+  final List<int>? audioBytes;
   final DateTime at;
 }
 
