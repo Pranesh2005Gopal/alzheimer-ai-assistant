@@ -26,3 +26,5 @@ frontend/pubspec.lock
 *.log
 .idea/
 .vscode/
+data/assistant_state.json
+data/conversations.json

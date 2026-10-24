@@ -7,7 +7,7 @@ import re
 import tempfile
 from pathlib import Path
 
-from utils.audio import apology_tone_wav, numpy_pcm_to_wav
+from utils.audio import numpy_pcm_to_wav
 from utils.config import Settings
 from utils.ffmpeg_audio import wav_bytes_pcm16
 
@@ -50,8 +50,11 @@ class CoquiTTS:
             wav = self._tts.tts(text=spoken)
             return wav_bytes_pcm16(numpy_pcm_to_wav(wav, self._sample_rate), sample_rate=self._sample_rate)
         except Exception:
-            logger.exception("Coqui TTS failed")
-            return wav_bytes_pcm16(apology_tone_wav(), sample_rate=22050)
+            # Do not turn a synthesis failure into a valid WAV tone.  Callers
+            # interpret non-empty audio as speech, so the old tone prevented
+            # the platform TTS fallback from ever speaking the reply.
+            logger.exception("Coqui TTS failed; returning no audio for platform TTS fallback")
+            return b""
 
 
 def _for_speech(text: str) -> str:

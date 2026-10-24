@@ -124,6 +124,8 @@ class DialogueManager:
         }:
             intent = Intent.CREATE_REMINDER
             nlu = nlu.model_copy(update={"intent": intent})
+        if self._looks_like_update_reminder(nlu.normalized_text):
+            return self._update_reminder(nlu)
         self.state.last_intent = intent
 
         combined = self._combine_read_questions(nlu)
@@ -258,6 +260,8 @@ class DialogueManager:
                 facts="What would you like me to remind you about?",
                 extras={"verbatim": True},
             )
+        if when is None and self._time_has_passed_today(time_iso):
+            return DialogueDecision("Say the facts below in the same words.", f"{time_iso} has already passed today. Would you like me to set it for tomorrow?", extras={"verbatim": True})
 
         reminder = self.reminders.create_from_utterance(nlu.normalized_text, when)
         return DialogueDecision(
@@ -275,6 +279,16 @@ class DialogueManager:
             facts=fact,
             mutated=removed,
         )
+
+    def _update_reminder(self, nlu: NLUResult) -> DialogueDecision:
+        from services.reminder_manager import _clock_from_text
+        time_iso = self._time_from_duckling(nlu) or _clock_from_text(nlu.normalized_text)
+        if not time_iso:
+            return DialogueDecision("Say the facts below in the same words.", "What new time would you like for the reminder?", extras={"verbatim": True})
+        reminder = self.reminders.update_matching(nlu.normalized_text, time_iso)
+        if reminder is None:
+            return DialogueDecision("Say the facts below in the same words.", "I could not find one clear reminder to change.", extras={"verbatim": True})
+        return DialogueDecision("Say the facts below in the same words.", f"Your reminder for {reminder.title} is now set for {self.reminders.spoken_created(reminder).split(' at ')[-1]}", mutated=True, extras={"verbatim": True})
 
     def _check_reminders(self, nlu: NLUResult) -> DialogueDecision:
         return DialogueDecision(
@@ -380,6 +394,11 @@ class DialogueManager:
         )
 
     def _chat(self, nlu: NLUResult) -> DialogueDecision:
+        lowered = nlu.normalized_text.lower().strip(" .!?")
+        if re.fullmatch(r"(?:hello|hi|hey)(?: there)?(?: nice to meet you)?", lowered) or "nice to meet you" in lowered:
+            return DialogueDecision("Say the facts below in the same words.", "Hello! It's lovely to meet you. I'm here to help whenever you need me.", extras={"verbatim": True})
+        if lowered in {"can you help me", "help me", "i need help"}:
+            return DialogueDecision("Say the facts below in the same words.", "Of course. What would you like help with?", extras={"verbatim": True})
         return DialogueDecision(
             user_prompt_for_llm=(
                 "Reply to what the patient just said. Stay on that topic. "
@@ -432,6 +451,15 @@ class DialogueManager:
         return bool(re.search(r"\b(remind me|a reminder)\b", lowered)) and any(
             token in lowered for token in (" to ", " at ", " for ")
         )
+
+    def _looks_like_update_reminder(self, text: str) -> bool:
+        return bool(re.search(r"\b(change|update|move|reschedule)\b.*\breminder\b|\breminder\b.*\b(change|update|move|reschedule)\b", text.lower()))
+
+    @staticmethod
+    def _time_has_passed_today(time_iso: str) -> bool:
+        from services.reminder_manager import parse_reminder_datetime
+        due = parse_reminder_datetime(time_iso, datetime.now())
+        return due is not None and due <= datetime.now() and "T" not in time_iso
 
     def _snooze_decision(self, nlu: NLUResult, lowered: str) -> DialogueDecision | None:
         minutes = _snooze_minutes(nlu, lowered)

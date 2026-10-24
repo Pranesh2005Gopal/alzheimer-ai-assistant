@@ -11,14 +11,19 @@ import 'theme/app_theme.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final settings = await AppSettings.load();
-  final controller = AssistantController(settings: settings);
   final authApi = AuthApi(baseUrl: settings.apiBase);
+  final controller = AssistantController(
+    settings: settings,
+    tokenProvider: () => authApi.token,
+  );
   final authController = AuthController(api: authApi);
-  runApp(PatientAssistantApp(
-    controller: controller,
-    authController: authController,
-    authApi: authApi,
-  ));
+  runApp(
+    PatientAssistantApp(
+      controller: controller,
+      authController: authController,
+      authApi: authApi,
+    ),
+  );
 }
 
 class PatientAssistantApp extends StatefulWidget {
@@ -91,9 +96,7 @@ class _RootNavigator extends StatelessWidget {
   Widget build(BuildContext context) {
     switch (authController.state) {
       case AuthState.loading:
-        return const Scaffold(
-          body: Center(child: CircularProgressIndicator()),
-        );
+        return const Scaffold(body: Center(child: CircularProgressIndicator()));
       case AuthState.unauthenticated:
         return const LoginScreen();
       case AuthState.authenticated:

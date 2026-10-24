@@ -29,6 +29,9 @@ from backend.auth.store import (
     update_profile,
     verify_user_pin,
 )
+from backend.container import get_container
+from repositories.postgres import link_legacy_patient
+from utils.config import get_settings
 
 router = APIRouter(tags=["auth"])
 
@@ -111,6 +114,11 @@ class PrivateUpdateRequest(BaseModel):
 class CaregiverPermissionRequest(BaseModel):
     caregiver_id: str
     permissions: list[str]
+
+
+class LegacyPatientLinkRequest(BaseModel):
+    legacy_patient_id: str = Field(min_length=1)
+    patient_user_id: str = Field(min_length=1)
 
 
 # ---------------------------------------------------------------------------
@@ -278,6 +286,9 @@ def update_private_info(
 def set_permissions(body: CaregiverPermissionRequest, user: dict = Depends(get_current_user)) -> dict:
     if user["role"] != "patient":
         raise HTTPException(status_code=403, detail="Only patients can set caregiver permissions")
+    caregiver = get_user_by_id(body.caregiver_id)
+    if not caregiver or caregiver["role"] != "caregiver":
+        raise HTTPException(status_code=400, detail="caregiver_id must identify an existing caregiver account")
     try:
         set_caregiver_permission(user["id"], body.caregiver_id, body.permissions)
     except ValueError as exc:
@@ -331,4 +342,23 @@ def caregiver_view_private(
 def list_audit_logs(user: dict = Depends(get_current_user)) -> dict:
     logs = get_audit_logs(user["id"] if user["role"] == "patient" else None)
     return {"audit_logs": logs}
+
+
+@router.post("/admin/legacy-patient-link")
+def link_legacy_patient_records(
+    body: LegacyPatientLinkRequest,
+    user: dict = Depends(get_current_user),
+) -> dict:
+    configured_admins = {email.strip().lower() for email in get_settings().care_admin_emails.split(",") if email.strip()}
+    if user["role"] != "admin" and user["email"].lower() not in configured_admins:
+        raise HTTPException(status_code=403, detail="Administrators only")
+    patient = get_user_by_id(body.patient_user_id)
+    if not patient or patient["role"] != "patient":
+        raise HTTPException(status_code=400, detail="Target must be an existing patient account")
+    container = get_container()
+    if not getattr(container, "settings").database_url:
+        raise HTTPException(status_code=503, detail="PostgreSQL storage is not configured")
+    result = link_legacy_patient(container.repos.factory, body.legacy_patient_id, body.patient_user_id)
+    log_audit_event(user["id"], "link_legacy_patient", body.patient_user_id, body.legacy_patient_id)
+    return result
 

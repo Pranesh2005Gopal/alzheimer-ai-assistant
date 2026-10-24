@@ -5,9 +5,10 @@ from __future__ import annotations
 
 from typing import Optional
 
-from fastapi import Depends, Header, HTTPException, status
+from dataclasses import dataclass
+from fastapi import Depends, Header, HTTPException, Query, status
 
-from backend.auth.store import get_session, get_user_by_id
+from backend.auth.store import get_caregiver_permissions, get_session, get_user_by_id
 
 
 def _get_bearer(authorization: Optional[str] = Header(default=None)) -> str:
@@ -48,3 +49,31 @@ def require_caregiver(user: dict = Depends(get_current_user)) -> dict:
     if user["role"] not in ("caregiver", "admin"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Caregivers only")
     return user
+
+
+@dataclass(frozen=True)
+class PatientAccess:
+    patient_id: str
+    user: dict
+
+
+def get_patient_access(
+    patient_id: str | None = Query(default=None),
+    user: dict = Depends(get_current_user),
+) -> PatientAccess:
+    """Resolve one patient only after authenticating the caller.
+
+    Patients are always limited to their own user id. Caregivers must name a
+    patient explicitly and have an existing permission link from that patient.
+    """
+    if user["role"] == "patient":
+        if patient_id and patient_id != user["id"]:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Patients can access only their own records")
+        return PatientAccess(patient_id=user["id"], user=user)
+    if user["role"] in ("caregiver", "admin"):
+        if not patient_id:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="patient_id is required for caregiver access")
+        if user["role"] != "admin" and not get_caregiver_permissions(patient_id, user["id"]):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Caregiver is not authorized for this patient")
+        return PatientAccess(patient_id=patient_id, user=user)
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Unsupported account role")

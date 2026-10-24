@@ -79,7 +79,7 @@ def patient_facing_speech(content: str, facts: str) -> str:
     from_facts = _patient_sentence_from_facts(facts)
     if from_facts:
         return from_facts
-    return "I am here with you. Please ask me again in a simple way."
+    return "I'm sorry, I can't answer that right now because my language service is unavailable."
 
 
 def _strip_internal(text: str) -> str:

@@ -10,17 +10,18 @@ PlatformTts createPlatformTts() => PlatformTtsStub();
 
 class PlatformTtsStub implements PlatformTts {
   final FlutterTts _flutterTts = FlutterTts();
-  VoidCallback? _onStart;
-  VoidCallback? _onComplete;
-  VoidCallback? _onCancel;
-  void Function(String error)? _onError;
+  void Function(int playbackId)? _onStart;
+  void Function(int playbackId)? _onComplete;
+  void Function(int playbackId)? _onCancel;
+  void Function(int playbackId, String error)? _onError;
+  int _activePlaybackId = 0;
 
   @override
   Future<void> init({
-    required VoidCallback onStart,
-    required VoidCallback onComplete,
-    required VoidCallback onCancel,
-    required void Function(String error) onError,
+    required void Function(int playbackId) onStart,
+    required void Function(int playbackId) onComplete,
+    required void Function(int playbackId) onCancel,
+    required void Function(int playbackId, String error) onError,
   }) async {
     _onStart = onStart;
     _onComplete = onComplete;
@@ -37,22 +38,22 @@ class PlatformTtsStub implements PlatformTts {
 
       _flutterTts.setStartHandler(() {
         debugPrint('[NativeTTS] Started speech');
-        _onStart?.call();
+        _onStart?.call(_activePlaybackId);
       });
 
       _flutterTts.setCompletionHandler(() {
         debugPrint('[NativeTTS] Completed speech');
-        _onComplete?.call();
+        _onComplete?.call(_activePlaybackId);
       });
 
       _flutterTts.setCancelHandler(() {
         debugPrint('[NativeTTS] Canceled speech');
-        _onCancel?.call();
+        _onCancel?.call(_activePlaybackId);
       });
 
       _flutterTts.setErrorHandler((msg) {
         debugPrint('[NativeTTS] Error from engine: $msg');
-        _onError?.call(msg.toString());
+        _onError?.call(_activePlaybackId, msg.toString());
       });
     } catch (e) {
       debugPrint('[NativeTTS] init failed: $e');
@@ -69,17 +70,24 @@ class PlatformTtsStub implements PlatformTts {
   }
 
   @override
-  Future<void> speak(String text, {String? locale}) async {
+  Future<void> speak(
+    String text, {
+    String? locale,
+    required int playbackId,
+  }) async {
     final clean = text.trim();
     if (clean.isEmpty) return;
 
     try {
+      _activePlaybackId = playbackId;
       final isTamil = _isTamil(clean);
       final preferredLang = locale ?? (isTamil ? 'ta-IN' : 'en-IN');
       bool languageSet = false;
 
       try {
-        final dynamic isSupported = await _flutterTts.isLanguageAvailable(preferredLang);
+        final dynamic isSupported = await _flutterTts.isLanguageAvailable(
+          preferredLang,
+        );
         if (isSupported == 1 || isSupported == true) {
           await _flutterTts.setLanguage(preferredLang);
           languageSet = true;
@@ -99,7 +107,7 @@ class PlatformTtsStub implements PlatformTts {
       await _flutterTts.speak(clean);
     } catch (e) {
       debugPrint('[NativeTTS] speak exception: $e');
-      _onError?.call(e.toString());
+      _onError?.call(playbackId, e.toString());
     }
   }
 
@@ -108,7 +116,7 @@ class PlatformTtsStub implements PlatformTts {
     try {
       await _flutterTts.stop();
     } catch (_) {}
-    _onCancel?.call();
+    _onCancel?.call(_activePlaybackId);
   }
 
   @override

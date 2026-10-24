@@ -9,10 +9,10 @@ import 'platform_tts.dart';
 PlatformTts createPlatformTts() => PlatformTtsWeb();
 
 class PlatformTtsWeb implements PlatformTts {
-  VoidCallback? _onStart;
-  VoidCallback? _onComplete;
-  VoidCallback? _onCancel;
-  void Function(String error)? _onError;
+  void Function(int playbackId)? _onStart;
+  void Function(int playbackId)? _onComplete;
+  void Function(int playbackId)? _onCancel;
+  void Function(int playbackId, String error)? _onError;
 
   web.SpeechSynthesisUtterance? _activeUtterance;
   Completer<void>? _activeCompleter;
@@ -22,10 +22,10 @@ class PlatformTtsWeb implements PlatformTts {
 
   @override
   Future<void> init({
-    required VoidCallback onStart,
-    required VoidCallback onComplete,
-    required VoidCallback onCancel,
-    required void Function(String error) onError,
+    required void Function(int playbackId) onStart,
+    required void Function(int playbackId) onComplete,
+    required void Function(int playbackId) onCancel,
+    required void Function(int playbackId, String error) onError,
   }) async {
     _onStart = onStart;
     _onComplete = onComplete;
@@ -112,8 +112,20 @@ class PlatformTtsWeb implements PlatformTts {
     return false;
   }
 
+  void _logSynthesisState(String event, int playbackId) {
+    final synthesis = web.window.speechSynthesis;
+    debugPrint(
+      '[WebTTS] $event id=$playbackId speaking=${synthesis.speaking} '
+      'pending=${synthesis.pending} paused=${synthesis.paused}',
+    );
+  }
+
   @override
-  Future<void> speak(String text, {String? locale}) async {
+  Future<void> speak(
+    String text, {
+    String? locale,
+    required int playbackId,
+  }) async {
     final clean = text.trim();
     if (clean.isEmpty) {
       debugPrint('[WebTTS] Empty text received, skipping speech');
@@ -123,7 +135,8 @@ class PlatformTtsWeb implements PlatformTts {
     // A Web Speech call is asynchronous.  Keep this Future pending until its
     // callback fires so controller code cannot start another speech path while
     // this utterance is still playing.
-    final utteranceId = ++_utteranceId;
+    final utteranceId = playbackId;
+    _utteranceId = utteranceId;
     _keepAliveTimer?.cancel();
     _keepAliveTimer = null;
     final previousCompleter = _activeCompleter;
@@ -155,13 +168,14 @@ class PlatformTtsWeb implements PlatformTts {
     _activeCompleter = completer;
 
     utterance.onstart = ((web.Event _) {
-      debugPrint('[WebTTS] Utterance playback started (${clean.length} chars)');
-      _onStart?.call();
+      if (utteranceId != _utteranceId) return;
+      _logSynthesisState('onstart', utteranceId);
+      _onStart?.call(utteranceId);
     }).toJS;
 
     utterance.onend = ((web.Event _) {
       if (utteranceId != _utteranceId) return;
-      debugPrint('[WebTTS] Utterance playback completed');
+      _logSynthesisState('onend', utteranceId);
       _keepAliveTimer?.cancel();
       _keepAliveTimer = null;
       if (_activeUtterance == utterance) {
@@ -170,13 +184,13 @@ class PlatformTtsWeb implements PlatformTts {
       if (!completer.isCompleted) {
         completer.complete();
       }
-      _onComplete?.call();
+      _onComplete?.call(utteranceId);
     }).toJS;
 
     utterance.onerror = ((web.SpeechSynthesisErrorEvent e) {
       if (utteranceId != _utteranceId) return;
       final errorType = e.error;
-      debugPrint('[WebTTS] Utterance error: $errorType');
+      _logSynthesisState('onerror($errorType)', utteranceId);
       _keepAliveTimer?.cancel();
       _keepAliveTimer = null;
       if (_activeUtterance == utterance) {
@@ -186,9 +200,9 @@ class PlatformTtsWeb implements PlatformTts {
         completer.complete();
       }
       if (errorType == 'canceled' || errorType == 'interrupted') {
-        _onCancel?.call();
+        _onCancel?.call(utteranceId);
       } else {
-        _onError?.call(errorType);
+        _onError?.call(utteranceId, errorType);
       }
     }).toJS;
 
@@ -210,9 +224,11 @@ class PlatformTtsWeb implements PlatformTts {
 
     try {
       debugPrint(
-        '[WebTTS] Invoking window.speechSynthesis.speak() (voice: ${voice?.name ?? "default"}, lang: ${utterance.lang})',
+        '[WebTTS] Invoking window.speechSynthesis.speak() id=$utteranceId '
+        '(voice: ${voice?.name ?? "default"}, lang: ${utterance.lang})',
       );
       web.window.speechSynthesis.speak(utterance);
+      _logSynthesisState('after speak()', utteranceId);
       if (web.window.speechSynthesis.paused) {
         web.window.speechSynthesis.resume();
       }
@@ -224,13 +240,15 @@ class PlatformTtsWeb implements PlatformTts {
       if (!completer.isCompleted) {
         completer.complete();
       }
-      _onError?.call(e.toString());
+      _onError?.call(utteranceId, e.toString());
     }
     await completer.future;
   }
 
   @override
   Future<void> stop() async {
+    final canceledId = _utteranceId;
+    _logSynthesisState('stop requested', canceledId);
     ++_utteranceId;
     _keepAliveTimer?.cancel();
     _keepAliveTimer = null;
@@ -243,7 +261,8 @@ class PlatformTtsWeb implements PlatformTts {
     try {
       web.window.speechSynthesis.cancel();
     } catch (_) {}
-    _onCancel?.call();
+    _onCancel?.call(canceledId);
+    _logSynthesisState('stop completed', canceledId);
   }
 
   @override

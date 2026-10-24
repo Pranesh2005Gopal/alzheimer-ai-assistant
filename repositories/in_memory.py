@@ -74,6 +74,9 @@ class InMemoryMemoryRepository:
         self._prefs[item.id] = item
         return item
 
+    def delete_preference(self, preference_id: str) -> bool:
+        return self._prefs.pop(preference_id, None) is not None
+
     def search_facts(self, query: str) -> list[str]:
         """Keyword fallback used until Chroma RAG is wired in Phase 3."""
         q = query.lower()

@@ -153,6 +153,16 @@ class TestUserStore:
         assert "full_name" in perms
         assert "hobbies" in perms
 
+    def test_caregiver_permission_requires_caregiver_account(self):
+        from backend.auth.store import create_user
+        patient = create_user("patient2@example.com", "pass1234", role="patient")
+        not_caregiver = create_user("patient3@example.com", "pass1234", role="patient")
+        from backend.api.routes_auth import set_permissions, CaregiverPermissionRequest
+        from fastapi import HTTPException
+        with pytest.raises(HTTPException) as error:
+            set_permissions(CaregiverPermissionRequest(caregiver_id=not_caregiver["id"], permissions=["care_data"]), patient)
+        assert error.value.status_code == 400
+
 
 # ---------------------------------------------------------------------------
 # FastAPI route tests

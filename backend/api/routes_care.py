@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from backend.container import get_container
+from backend.auth.dependencies import PatientAccess, get_patient_access
 from models.domain import ReminderKind
 
 router = APIRouter(tags=["care"])
@@ -20,11 +21,21 @@ class CreateReminderRequest(BaseModel):
     notes: str = ""
 
 
+class UpdateReminderRequest(BaseModel):
+    title: Optional[str] = None
+    time_iso: Optional[str] = None
+    frequency: Optional[str] = None
+
+
 class PreferredNameRequest(BaseModel):
     preferred_name: str = Field(min_length=1)
 
 
 class MemoryNoteRequest(BaseModel):
+    text: str = Field(min_length=1)
+
+
+class UpdateMemoryNoteRequest(BaseModel):
     text: str = Field(min_length=1)
 
 
@@ -66,16 +77,16 @@ def _appointment_payload(appointment) -> dict:
 
 
 @router.get("/reminders")
-def list_reminders() -> dict:
-    container = get_container()
+def list_reminders(access: PatientAccess = Depends(get_patient_access)) -> dict:
+    container = get_container(access.patient_id)
     items = [_reminder_payload(item) for item in container.repos.reminders.list_all()]
     items.sort(key=lambda row: row["time"])
     return {"reminders": items}
 
 
 @router.post("/reminders")
-def create_reminder(body: CreateReminderRequest) -> dict:
-    container = get_container()
+def create_reminder(body: CreateReminderRequest, access: PatientAccess = Depends(get_patient_access)) -> dict:
+    container = get_container(access.patient_id)
     try:
         kind = ReminderKind(body.kind)
     except ValueError as exc:
@@ -97,8 +108,8 @@ def create_reminder(body: CreateReminderRequest) -> dict:
 
 
 @router.post("/reminders/{reminder_id}/complete")
-def complete_reminder(reminder_id: str) -> dict:
-    container = get_container()
+def complete_reminder(reminder_id: str, access: PatientAccess = Depends(get_patient_access)) -> dict:
+    container = get_container(access.patient_id)
     reminder = container.reminders.complete(reminder_id)
     if reminder is None:
         raise HTTPException(status_code=404, detail="Reminder not found.")
@@ -110,9 +121,26 @@ def complete_reminder(reminder_id: str) -> dict:
     return {"reminder": _reminder_payload(reminder)}
 
 
+@router.patch("/reminders/{reminder_id}")
+def update_reminder(reminder_id: str, body: UpdateReminderRequest, access: PatientAccess = Depends(get_patient_access)) -> dict:
+    container = get_container(access.patient_id)
+    reminder = next((item for item in container.repos.reminders.list_all() if item.id == reminder_id), None)
+    if reminder is None:
+        raise HTTPException(status_code=404, detail="Reminder not found.")
+    if body.title is not None:
+        reminder.title = body.title.strip() or reminder.title
+    if body.time_iso is not None:
+        if not body.time_iso.strip():
+            raise HTTPException(status_code=400, detail="A reminder time is required.")
+        reminder.time_iso = body.time_iso.strip()
+    if body.frequency is not None:
+        reminder.frequency = body.frequency.strip() or reminder.frequency
+    return {"reminder": _reminder_payload(container.repos.reminders.update(reminder))}
+
+
 @router.delete("/reminders/{reminder_id}")
-def delete_reminder(reminder_id: str) -> dict:
-    container = get_container()
+def delete_reminder(reminder_id: str, access: PatientAccess = Depends(get_patient_access)) -> dict:
+    container = get_container(access.patient_id)
     deleted = container.reminders.repo.delete(reminder_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Reminder not found.")
@@ -121,16 +149,16 @@ def delete_reminder(reminder_id: str) -> dict:
 
 
 @router.get("/appointments")
-def list_appointments() -> dict:
-    container = get_container()
+def list_appointments(access: PatientAccess = Depends(get_patient_access)) -> dict:
+    container = get_container(access.patient_id)
     items = [_appointment_payload(item) for item in container.repos.appointments.list_all()]
     items.sort(key=lambda row: (row["date"], row["time"]))
     return {"appointments": items}
 
 
 @router.post("/appointments")
-def create_appointment(body: CreateAppointmentRequest) -> dict:
-    container = get_container()
+def create_appointment(body: CreateAppointmentRequest, access: PatientAccess = Depends(get_patient_access)) -> dict:
+    container = get_container(access.patient_id)
     appointment = container.appointments.create(
         doctor=body.doctor,
         date_iso=body.date_iso,
@@ -147,8 +175,8 @@ def create_appointment(body: CreateAppointmentRequest) -> dict:
 
 
 @router.post("/care/notes")
-def add_care_note(body: CareNoteRequest) -> dict:
-    container = get_container()
+def add_care_note(body: CareNoteRequest, access: PatientAccess = Depends(get_patient_access)) -> dict:
+    container = get_container(access.patient_id)
     event = container.activity.log(
         "care_note",
         body.note.strip(),
@@ -158,8 +186,8 @@ def add_care_note(body: CareNoteRequest) -> dict:
 
 
 @router.get("/memory")
-def memory_overview() -> dict:
-    container = get_container()
+def memory_overview(access: PatientAccess = Depends(get_patient_access)) -> dict:
+    container = get_container(access.patient_id)
     repo = container.repos.memory
     return {
         "patient_name": container.memory.patient_display_name()
@@ -192,16 +220,38 @@ def memory_overview() -> dict:
 
 
 @router.post("/memory/notes")
-def add_memory_note(body: MemoryNoteRequest) -> dict:
-    container = get_container()
+def add_memory_note(body: MemoryNoteRequest, access: PatientAccess = Depends(get_patient_access)) -> dict:
+    container = get_container(access.patient_id)
     stored = container.memory.store_from_utterance(body.text.strip())
     container.activity.log("memory", stored, {})
     return {"message": stored}
 
 
+@router.patch("/memory/notes/{memory_id}")
+def update_memory_note(memory_id: str, body: UpdateMemoryNoteRequest, access: PatientAccess = Depends(get_patient_access)) -> dict:
+    container = get_container(access.patient_id)
+    note = next((item for item in container.repos.memory.list_preferences() if item.id == memory_id and item.key == "note"), None)
+    if note is None:
+        raise HTTPException(status_code=404, detail="Memory note not found.")
+    note.value = body.text.strip()
+    container.repos.memory.add_preference(note)
+    container.memory.semantic.upsert(note.id, note.value, {"kind": "long_term_note"})
+    return {"id": note.id, "text": note.value}
+
+
+@router.delete("/memory/notes/{memory_id}")
+def delete_memory_note(memory_id: str, access: PatientAccess = Depends(get_patient_access)) -> dict:
+    container = get_container(access.patient_id)
+    note = next((item for item in container.repos.memory.list_preferences() if item.id == memory_id and item.key == "note"), None)
+    if note is None or not container.repos.memory.delete_preference(memory_id):
+        raise HTTPException(status_code=404, detail="Memory note not found.")
+    container.memory.semantic.delete(memory_id)
+    return {"ok": True, "memory_id": memory_id}
+
+
 @router.get("/activity")
-def recent_activity(limit: int = 50) -> dict:
-    container = get_container()
+def recent_activity(limit: int = 50, access: PatientAccess = Depends(get_patient_access)) -> dict:
+    container = get_container(access.patient_id)
     events = container.repos.activity.recent(max(1, min(limit, 200)))
     return {
         "events": [
@@ -212,8 +262,8 @@ def recent_activity(limit: int = 50) -> dict:
 
 
 @router.get("/conversation")
-def conversation_history() -> dict:
-    container = get_container()
+def conversation_history(access: PatientAccess = Depends(get_patient_access)) -> dict:
+    container = get_container(access.patient_id)
     turns = container.history.recent(40)
     return {
         "turns": [
@@ -229,8 +279,8 @@ def conversation_history() -> dict:
 
 
 @router.post("/profile/name")
-def set_preferred_name(body: PreferredNameRequest) -> dict:
-    container = get_container()
+def set_preferred_name(body: PreferredNameRequest, access: PatientAccess = Depends(get_patient_access)) -> dict:
+    container = get_container(access.patient_id)
     message = container.memory.set_preferred_name(body.preferred_name)
     if not message:
         raise HTTPException(status_code=400, detail="A name is required.")

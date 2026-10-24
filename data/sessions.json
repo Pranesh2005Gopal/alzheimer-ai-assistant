@@ -52,5 +52,65 @@
     "role": "patient",
     "created_at": "2026-10-23T14:01:28+00:00",
     "last_seen": 1792764088.7678914
+  },
+  "0NdrdPQ_nNkjC2qO6L5uVDLieQpqUyfxp1juE-LlpMo": {
+    "user_id": "b65f5da1a090404e",
+    "role": "patient",
+    "created_at": "2026-10-23T14:45:54+00:00",
+    "last_seen": 1792766754.5746746
+  },
+  "rnr1nOoMGVM58M9AR7X21sYn5_KnROFw-aXIfaFMGdY": {
+    "user_id": "b65f5da1a090404e",
+    "role": "patient",
+    "created_at": "2026-10-24T05:03:52+00:00",
+    "last_seen": 1792818232.349768
+  },
+  "4jnAPqqaewq-3R8wwOpcfxikZrG4JapO3O0ifFo3ZR8": {
+    "user_id": "b65f5da1a090404e",
+    "role": "patient",
+    "created_at": "2026-10-24T05:28:03+00:00",
+    "last_seen": 1792819683.8208075
+  },
+  "q9XuwZMQhA274bXMNHwTbZbNl15ao4rBVTKJ7_-VtF4": {
+    "user_id": "b65f5da1a090404e",
+    "role": "patient",
+    "created_at": "2026-10-24T06:45:38+00:00",
+    "last_seen": 1792824338.69412
+  },
+  "La9PxLp3kKN5dtxO5lMFoQI4xZyJeN5UMC5Tv83Y8PU": {
+    "user_id": "b65f5da1a090404e",
+    "role": "patient",
+    "created_at": "2026-10-24T06:56:07+00:00",
+    "last_seen": 1792825204.637852
+  },
+  "N7SfMGpepovtGvkEZCQicslHdrbEaR2Fp1nX7w8OXEA": {
+    "user_id": "b65f5da1a090404e",
+    "role": "patient",
+    "created_at": "2026-10-24T08:55:29+00:00",
+    "last_seen": 1792832634.8958125
+  },
+  "AXt44_WgpxqcpEw3nGJLW-NE7-HcF-CBU-dCK7hm0Fo": {
+    "user_id": "b65f5da1a090404e",
+    "role": "patient",
+    "created_at": "2026-10-24T09:06:54+00:00",
+    "last_seen": 1792832845.7259173
+  },
+  "4SKUUmClxHkIuj5Va_OAFERjrSDFteZ5Fsjr2-e5Vcs": {
+    "user_id": "b65f5da1a090404e",
+    "role": "patient",
+    "created_at": "2026-10-24T09:15:03+00:00",
+    "last_seen": 1792833962.1546993
+  },
+  "P0FxACLkIkdFgi3J6evxfGa7GoDNrsWZ0nEJ1oN1-o0": {
+    "user_id": "b65f5da1a090404e",
+    "role": "patient",
+    "created_at": "2026-10-24T09:28:30+00:00",
+    "last_seen": 1792834228.8849149
+  },
+  "LFZ4UwAdpenCmzdIQjdIGlRrFIysMYSGWHV_10oh5E8": {
+    "user_id": "b65f5da1a090404e",
+    "role": "patient",
+    "created_at": "2026-10-24T09:38:04+00:00",
+    "last_seen": 1792835132.163549
   }
 }

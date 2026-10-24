@@ -115,7 +115,8 @@ def test_memory_who_am_i():
     )
     answer = memory.identify(nlu)
     assert "helper" in answer.lower()
-    assert "Your name is" in answer or "at home" in answer.lower()
+    assert "name saved" in answer.lower()
+    assert "at home" not in answer.lower()
 
 
 def test_memory_family_roles_come_from_stored_people():

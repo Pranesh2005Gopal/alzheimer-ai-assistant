@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import base64
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from backend.container import get_container
+from backend.auth.dependencies import PatientAccess, get_patient_access
 
 router = APIRouter(tags=["text"])
 
@@ -17,8 +18,8 @@ class TextTurnRequest(BaseModel):
 
 
 @router.post("/text/turn")
-def text_turn(body: TextTurnRequest) -> dict:
-    result = get_container().pipeline.run_text(body.text)
+def text_turn(body: TextTurnRequest, access: PatientAccess = Depends(get_patient_access)) -> dict:
+    result = get_container(access.patient_id).pipeline.run_text(body.text)
     return {
         "transcript": result.transcript,
         "intent": result.intent,

@@ -9,11 +9,14 @@ from utils.config import Settings
 from ai.nlu.clauses import spoken_clauses
 from ai.nlu.distilbert_intent import DistilBertIntentClassifier
 from ai.nlu.duckling_temporal import DucklingTemporalParser
-from ai.nlu.spacy_preprocessor import SpacyPreprocessor
 
 
 class NLUPipeline:
     def __init__(self, settings: Settings) -> None:
+        # Load spaCy only when the conversational pipeline is constructed, not
+        # when lightweight API routes import the application.
+        from ai.nlu.spacy_preprocessor import SpacyPreprocessor
+
         self.spacy = SpacyPreprocessor(settings)
         self.intent = DistilBertIntentClassifier(settings)
         self.duckling = DucklingTemporalParser(settings)

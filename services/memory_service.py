@@ -149,7 +149,7 @@ class MemoryService:
         name = self.patient_display_name()
         if name:
             return f"Your name is {name}. I am your helper, and I am here with you."
-        return "You are at home. I am your helper, and I am here with you."
+        return "I do not have your name saved yet. I am your helper, and I am here to help you."
 
     @staticmethod
     def _is_self_question(lowered: str) -> bool:
@@ -186,6 +186,8 @@ class MemoryService:
         for pref in self.repo.list_preferences("patient"):
             if pref.key == "preferred_name":
                 pref.value = cleaned
+                # Re-add makes durable repositories flush the updated value.
+                self.repo.add_preference(pref)
                 return f"The patient's name is {cleaned}."
         self.repo.add_preference(
             Preference(id=uuid4().hex[:12], subject="patient", key="preferred_name", value=cleaned)
@@ -197,10 +199,7 @@ class MemoryService:
         structured = self.repo.search_facts(query)
         combined = semantic_hits + structured
         if not combined:
-            prefs = [f"{p.subject} {p.key}: {p.value}" for p in self.repo.list_preferences()]
-            dates = [f"{d.title} on {d.date_iso}" for d in self.repo.list_important_dates()]
-            people = [f"{p.name} is your {p.relationship}" for p in self.repo.list_people()]
-            combined = people + dates + prefs
+            return "I could not find that information in your saved memories."
         return "Memory facts:\n" + "\n".join(combined[:10])
 
     def store_from_utterance(self, text: str) -> str:

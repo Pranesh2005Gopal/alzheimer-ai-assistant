@@ -19,6 +19,7 @@ class ReminderKind(str, Enum):
 class ReminderStatus(str, Enum):
     PENDING = "pending"
     COMPLETED = "completed"
+    CANCELLED = "cancelled"
     MISSED = "missed"
 
 

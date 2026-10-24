@@ -56,7 +56,8 @@ class HealthStatus {
     }
     return HealthStatus(
       reachable: json['ok'] == true,
-      status: json['status'] as String? ?? (json['ok'] == true ? 'ready' : 'error'),
+      status:
+          json['status'] as String? ?? (json['ok'] == true ? 'ready' : 'error'),
       patient: json['patient'] as String? ?? '',
       services: services,
     );
@@ -64,9 +65,16 @@ class HealthStatus {
 }
 
 class ChatLine {
-  ChatLine({required this.fromYou, required this.text, this.audioBytes, DateTime? at})
-      : at = at ?? DateTime.now();
+  ChatLine({
+    required this.fromYou,
+    required this.text,
+    this.audioBytes,
+    DateTime? at,
+  }) : id = 'line-${_nextId++}',
+       at = at ?? DateTime.now();
 
+  static int _nextId = 0;
+  final String id;
   final bool fromYou;
   final String text;
   final List<int>? audioBytes;
@@ -193,7 +201,12 @@ class PersonItem {
 }
 
 class MemoryDate {
-  MemoryDate({required this.title, required this.date, required this.kind, this.notes = ''});
+  MemoryDate({
+    required this.title,
+    required this.date,
+    required this.kind,
+    this.notes = '',
+  });
 
   final String title;
   final String date;
@@ -211,7 +224,11 @@ class MemoryDate {
 }
 
 class PreferenceItem {
-  PreferenceItem({required this.subject, required this.key, required this.value});
+  PreferenceItem({
+    required this.subject,
+    required this.key,
+    required this.value,
+  });
 
   final String subject;
   final String key;
@@ -243,7 +260,12 @@ class ActivityItem {
 }
 
 class ConversationTurnItem {
-  ConversationTurnItem({required this.role, required this.text, required this.time, this.intent});
+  ConversationTurnItem({
+    required this.role,
+    required this.text,
+    required this.time,
+    this.intent,
+  });
 
   final String role;
   final String text;
@@ -322,7 +344,10 @@ class OverviewData {
       if (value is! List) {
         return const [];
       }
-      return value.map((row) => asMap(row)).whereType<Map<String, dynamic>>().toList();
+      return value
+          .map((row) => asMap(row))
+          .whereType<Map<String, dynamic>>()
+          .toList();
     }
 
     final memory = asMap(json['memory']) ?? {};
@@ -335,15 +360,27 @@ class OverviewData {
       caregiverName: json['caregiver_name'] as String? ?? '',
       dateLabel: json['date_label'] as String? ?? '',
       timeLabel: json['time_label'] as String? ?? '',
-      nextReminder: nextReminder == null ? null : ReminderItem.fromJson(nextReminder),
+      nextReminder: nextReminder == null
+          ? null
+          : ReminderItem.fromJson(nextReminder),
       activeReminder: active == null ? null : ReminderItem.fromJson(active),
-      nextAppointment: nextAppointment == null ? null : AppointmentItem.fromJson(nextAppointment),
+      nextAppointment: nextAppointment == null
+          ? null
+          : AppointmentItem.fromJson(nextAppointment),
       reminders: asMaps(json['reminders']).map(ReminderItem.fromJson).toList(),
-      appointments: asMaps(json['appointments']).map(AppointmentItem.fromJson).toList(),
+      appointments: asMaps(json['appointments'])
+          .map(AppointmentItem.fromJson)
+          .toList(),
       family: asMaps(json['family']).map(PersonItem.fromJson).toList(),
-      importantDates: asMaps(memory['important_dates']).map(MemoryDate.fromJson).toList(),
-      preferences: asMaps(memory['preferences']).map(PreferenceItem.fromJson).toList(),
-      activity: asMaps(json['recent_activity']).map(ActivityItem.fromJson).toList(),
+      importantDates: asMaps(memory['important_dates'])
+          .map(MemoryDate.fromJson)
+          .toList(),
+      preferences: asMaps(memory['preferences'])
+          .map(PreferenceItem.fromJson)
+          .toList(),
+      activity: asMaps(json['recent_activity'])
+          .map(ActivityItem.fromJson)
+          .toList(),
     );
   }
 }

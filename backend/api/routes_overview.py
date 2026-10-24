@@ -1,17 +1,18 @@
 import base64
 from datetime import datetime
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from backend.container import get_container
+from backend.auth.dependencies import PatientAccess, get_patient_access
 
 router = APIRouter(tags=["overview"])
 
 
 @router.get("/patient/overview")
-def patient_overview() -> dict:
+def patient_overview(access: PatientAccess = Depends(get_patient_access)) -> dict:
     """Elderly home-screen data. Full dashboards land in Phases 5–6."""
-    container = get_container()
+    container = get_container(access.patient_id)
     now = datetime.now()
     nxt_reminder = container.reminders.next_pending()
     nxt_appointment = container.repos.appointments.next_appointment()

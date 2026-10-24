@@ -26,9 +26,9 @@ class Settings(BaseSettings):
     # spaCy
     spacy_model: str = "en_core_web_sm"
 
-    # Llama 3 via Ollama
+    # Ollama chat model
     ollama_host: str = "http://127.0.0.1:11434"
-    ollama_model: str = "llama3"
+    ollama_model: str = "qwen2.5:0.5b"
 
     # Coqui TTS
     coqui_model: str = "tts_models/en/ljspeech/tacotron2-DDC"
@@ -37,6 +37,12 @@ class Settings(BaseSettings):
     chroma_path: Path = ROOT / "data" / "chroma"
 
     seed_path: Path = ROOT / "data" / "seed.json"
+    state_path: Path = ROOT / "data" / "assistant_state.json"
+    conversation_path: Path = ROOT / "data" / "conversations.json"
+    conversation_history_limit: int = 50
+    database_url: str = ""
+    database_patient_id: str = "patient-1"
+    care_admin_emails: str = ""
     intent_examples_path: Path = ROOT / "data" / "intent_examples.json"
 
     # Isolation Forest (Phase 7) — never used for medical diagnosis

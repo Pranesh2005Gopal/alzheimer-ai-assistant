@@ -16,23 +16,36 @@ import '../settings/app_settings.dart';
 import '../vision/face_capture.dart';
 
 class AssistantController extends ChangeNotifier {
-  AssistantController({required AppSettings settings})
-      : _settings = settings,
-        _api = AssistantApi(baseUrl: settings.apiBase) {
+  AssistantController({
+    required AppSettings settings,
+    String? Function()? tokenProvider,
+    PlatformTts? tts,
+  }) : _settings = settings,
+       _api = AssistantApi(
+         baseUrl: settings.apiBase,
+         tokenProvider: tokenProvider,
+       ),
+       _tts = tts ?? getPlatformTts() {
     _initTts();
   }
 
   final AppSettings _settings;
   final AssistantApi _api;
-  final PatientMic _mic = PatientMic();
-  final SpeechPlayer _speaker = SpeechPlayer();
+  late final PatientMic _mic = PatientMic();
+  SpeechPlayer? _speaker;
   final FaceCapture _capture = FaceCapture();
-  final PlatformTts _tts = getPlatformTts();
+  final PlatformTts _tts;
   final stt.SpeechToText _speech = stt.SpeechToText();
   final List<ChatLine> lines = <ChatLine>[];
 
   bool ttsMuted = false;
   String? currentlySpeakingText;
+  String? currentlySpeakingLineId;
+  String? _pendingSpeechLineId;
+  int? _activePlaybackId;
+  int? _pendingPlaybackId;
+  int _nextPlaybackId = 0;
+  final Set<String> _automaticallyPlayedLineIds = <String>{};
   bool _sttInitialized = false;
   String _currentTranscript = '';
   bool _turnSubmitted = false;
@@ -48,7 +61,9 @@ class AssistantController extends ChangeNotifier {
 
   HealthStatus? health;
   OverviewData? overview;
-  CameraSnapshot camera = CameraSnapshot(availability: CameraAvailability.unknown);
+  CameraSnapshot camera = CameraSnapshot(
+    availability: CameraAvailability.unknown,
+  );
   FaceEvent? lastFace;
   FaceRecognitionResult? lastRecognitionResult;
   VoicePhase voicePhase = VoicePhase.idle;
@@ -170,8 +185,14 @@ class AssistantController extends ChangeNotifier {
       return;
     }
     if (_heardReminderKey != key) {
+      // Overview polling must never replace an in-progress assistant reply.
+      // Leave this reminder pending so the next poll can deliver it once the
+      // current utterance has completed.
+      if (currentlySpeakingText != null || voicePhase == VoicePhase.speaking) {
+        return;
+      }
       _heardReminderKey = key;
-      addLine(fromYou: false, text: message);
+      final line = addLine(fromYou: false, text: message);
       if (active.needsSpeech && !listening && !ttsMuted) {
         statusText = message;
         _emit();
@@ -179,20 +200,38 @@ class AssistantController extends ChangeNotifier {
         // same reminder through the existing platform TTS instead of treating
         // a notification/tone as a spoken reminder.
         if (active.audioBytes != null && active.audioBytes!.length >= 45) {
-          await speakBytes(active.audioBytes!, text: message);
+          await speakAssistantLine(
+            line,
+            automatic: true,
+            source: 'due-reminder',
+          );
         } else {
-          await speakText(message);
+          await speakAssistantLine(
+            line,
+            automatic: true,
+            source: 'due-reminder',
+          );
         }
       }
     }
   }
 
-  void addLine({required bool fromYou, required String text, List<int>? audioBytes}) {
-    lines.add(ChatLine(fromYou: fromYou, text: text, audioBytes: audioBytes));
+  ChatLine addLine({
+    required bool fromYou,
+    required String text,
+    List<int>? audioBytes,
+  }) {
+    final line = ChatLine(fromYou: fromYou, text: text, audioBytes: audioBytes);
+    lines.add(line);
     _emit();
+    return line;
   }
 
-  Future<void> speakBytes(List<int> audioBytes, {String? text}) async {
+  Future<void> speakBytes(
+    List<int> audioBytes, {
+    String? text,
+    String? lineId,
+  }) async {
     if (audioBytes.length < 45) {
       return;
     }
@@ -200,18 +239,24 @@ class AssistantController extends ChangeNotifier {
       await stopSpeaking();
     }
     currentlySpeakingText = text;
+    currentlySpeakingLineId = lineId;
     voicePhase = VoicePhase.speaking;
     statusText = 'Speaking';
     _emit();
     try {
-      debugPrint('[Assistant] Speaking audio bytes (${audioBytes.length} bytes)');
-      await _speaker.playWav(audioBytes);
+      debugPrint(
+        '[Assistant] Speaking audio bytes (${audioBytes.length} bytes)',
+      );
+      await (_speaker ??= SpeechPlayer()).playWav(audioBytes);
     } catch (error) {
       currentlySpeakingText = null;
+      currentlySpeakingLineId = null;
       debugPrint('[Assistant] speakBytes error: $error');
-      if (error.toString().contains('NotAllowedError') || error.toString().contains('play() failed')) {
+      if (error.toString().contains('NotAllowedError') ||
+          error.toString().contains('play() failed')) {
         blockedAudio = audioBytes;
-        statusText = 'Audio blocked by the browser. Tap Play to hear the reply.';
+        statusText =
+            'Audio blocked by the browser. Tap Play to hear the reply.';
         voiceError = statusText;
       } else {
         voiceError = 'Speech playback failed. $error';
@@ -222,6 +267,7 @@ class AssistantController extends ChangeNotifier {
       return;
     }
     currentlySpeakingText = null;
+    currentlySpeakingLineId = null;
     if (voicePhase == VoicePhase.speaking) {
       voicePhase = VoicePhase.idle;
       statusText = 'Online and ready';
@@ -230,10 +276,28 @@ class AssistantController extends ChangeNotifier {
   }
 
   Future<void> replayLine(ChatLine line) async {
+    await speakAssistantLine(line, source: 'replay');
+  }
+
+  Future<void> speakAssistantLine(
+    ChatLine line, {
+    bool automatic = false,
+    String source = 'unknown',
+  }) async {
+    if (automatic && !_automaticallyPlayedLineIds.add(line.id)) {
+      debugPrint(
+        '[TTS] Ignoring duplicate automatic playback source=$source line=${line.id}',
+      );
+      return;
+    }
+    debugPrint(
+      '[TTS] Starting ${automatic ? 'automatic' : 'explicit'} playback '
+      'source=$source line=${line.id}',
+    );
     if (line.audioBytes != null && line.audioBytes!.length >= 45) {
-      await speakBytes(line.audioBytes!, text: line.text);
+      await speakBytes(line.audioBytes!, text: line.text, lineId: line.id);
     } else {
-      await speakText(line.text);
+      await speakText(line.text, lineId: line.id);
     }
   }
 
@@ -249,37 +313,59 @@ class AssistantController extends ChangeNotifier {
   Future<void> _initTts() async {
     try {
       await _tts.init(
-        onStart: () {
+        onStart: (playbackId) {
           debugPrint('[TTS] Started speech');
-          if (!_alive) return;
+          if (!_alive || playbackId != _pendingPlaybackId) return;
+          _activePlaybackId = playbackId;
+          currentlySpeakingLineId = _pendingSpeechLineId;
           voicePhase = VoicePhase.speaking;
           statusText = 'Speaking';
           _emit();
         },
-        onComplete: () {
+        onComplete: (playbackId) {
           debugPrint('[TTS] Completed speech');
-          if (!_alive) return;
+          if (!_alive || playbackId != _activePlaybackId) return;
+          _activePlaybackId = null;
+          _pendingPlaybackId = null;
           currentlySpeakingText = null;
+          currentlySpeakingLineId = null;
+          _pendingSpeechLineId = null;
           if (voicePhase == VoicePhase.speaking) {
             voicePhase = VoicePhase.idle;
             statusText = 'Online and ready';
           }
           _emit();
         },
-        onCancel: () {
+        onCancel: (playbackId) {
           debugPrint('[TTS] Canceled speech');
-          if (!_alive) return;
+          if (!_alive ||
+              (playbackId != _activePlaybackId &&
+                  playbackId != _pendingPlaybackId)) {
+            return;
+          }
+          _activePlaybackId = null;
+          _pendingPlaybackId = null;
           currentlySpeakingText = null;
+          currentlySpeakingLineId = null;
+          _pendingSpeechLineId = null;
           if (voicePhase == VoicePhase.speaking) {
             voicePhase = VoicePhase.idle;
             statusText = 'Online and ready';
           }
           _emit();
         },
-        onError: (msg) {
+        onError: (playbackId, msg) {
           debugPrint('[TTS] Error reported from engine: $msg');
-          if (!_alive) return;
+          if (!_alive ||
+              (playbackId != _activePlaybackId &&
+                  playbackId != _pendingPlaybackId)) {
+            return;
+          }
+          _activePlaybackId = null;
+          _pendingPlaybackId = null;
           currentlySpeakingText = null;
+          currentlySpeakingLineId = null;
+          _pendingSpeechLineId = null;
           if (voicePhase == VoicePhase.speaking) {
             voicePhase = VoicePhase.idle;
             statusText = 'Online and ready';
@@ -305,7 +391,9 @@ class AssistantController extends ChangeNotifier {
             voicePhase = VoicePhase.listening;
             statusText = 'Listening — speak now. Tap Stop when finished.';
             _emit();
-          } else if (status == 'notListening' || status == 'done' || status == 'doneNoResult') {
+          } else if (status == 'notListening' ||
+              status == 'done' ||
+              status == 'doneNoResult') {
             listening = false;
             if (voicePhase == VoicePhase.listening) {
               _finishListeningSession();
@@ -314,7 +402,9 @@ class AssistantController extends ChangeNotifier {
         },
         onError: (errorNotification) {
           final errorMsg = errorNotification.errorMsg.toLowerCase();
-          debugPrint('[STT] Error notification: $errorMsg (permanent: ${errorNotification.permanent})');
+          debugPrint(
+            '[STT] Error notification: $errorMsg (permanent: ${errorNotification.permanent})',
+          );
           if (!_alive) return;
           listening = false;
           busy = false;
@@ -326,10 +416,14 @@ class AssistantController extends ChangeNotifier {
           } else if (errorMsg.contains('not supported') ||
               errorMsg.contains('speech_not_supported')) {
             voiceError = 'Speech recognition is not supported in this browser. Please use Google Chrome.';
-          } else if (errorMsg.contains('timeout') || errorMsg == 'error_speech_timeout') {
-            voiceError = 'Listening timed out. Please tap Talk and speak again.';
-          } else if (errorMsg.contains('no-speech') || errorMsg == 'error_no_match') {
-            voiceError = 'No speech was detected. Please tap Talk and speak clearly.';
+          } else if (errorMsg.contains('timeout') ||
+              errorMsg == 'error_speech_timeout') {
+            voiceError =
+                'Listening timed out. Please tap Talk and speak again.';
+          } else if (errorMsg.contains('no-speech') ||
+              errorMsg == 'error_no_match') {
+            voiceError =
+                'No speech was detected. Please tap Talk and speak clearly.';
           } else if (errorMsg.contains('audio-capture')) {
             voiceError = 'No microphone was found. Please check your microphone connection.';
           } else if (errorMsg.contains('network')) {
@@ -385,14 +479,9 @@ class AssistantController extends ChangeNotifier {
     _emit();
   }
 
-  Future<void> speakText(String text) async {
+  Future<void> speakText(String text, {String? lineId}) async {
     final clean = text.trim();
     if (clean.isEmpty) return;
-
-    if (currentlySpeakingText == clean && voicePhase == VoicePhase.speaking) {
-      debugPrint('[TTS] Already speaking this text, skipping duplicate call');
-      return;
-    }
 
     if (voicePhase == VoicePhase.speaking || currentlySpeakingText != null) {
       debugPrint('[TTS] Stopping active speech before starting new speech');
@@ -401,16 +490,22 @@ class AssistantController extends ChangeNotifier {
     }
 
     currentlySpeakingText = clean;
-    voicePhase = VoicePhase.speaking;
-    statusText = 'Speaking';
-    _emit();
+    _pendingSpeechLineId = lineId;
+    final playbackId = ++_nextPlaybackId;
+    _pendingPlaybackId = playbackId;
 
     try {
       debugPrint('[TTS] Speaking text turn (${clean.length} chars)');
-      await _tts.speak(clean);
+      await _tts.speak(clean, playbackId: playbackId);
     } catch (e) {
       debugPrint('[TTS] speakText exception: $e');
       currentlySpeakingText = null;
+      currentlySpeakingLineId = null;
+      _pendingSpeechLineId = null;
+      if (_activePlaybackId == playbackId || _pendingPlaybackId == playbackId) {
+        _activePlaybackId = null;
+        _pendingPlaybackId = null;
+      }
       if (voicePhase == VoicePhase.speaking) {
         voicePhase = VoicePhase.idle;
         statusText = 'Online and ready';
@@ -420,15 +515,20 @@ class AssistantController extends ChangeNotifier {
   }
 
   Future<void> stopSpeaking() async {
-    final wasSpeaking = voicePhase == VoicePhase.speaking || currentlySpeakingText != null;
+    final wasSpeaking =
+        voicePhase == VoicePhase.speaking || currentlySpeakingText != null;
     currentlySpeakingText = null;
+    currentlySpeakingLineId = null;
+    _pendingSpeechLineId = null;
+    _activePlaybackId = null;
+    _pendingPlaybackId = null;
     if (wasSpeaking) {
       debugPrint('[TTS] Stopping active speech');
       try {
         await _tts.stop();
       } catch (_) {}
       try {
-        await _speaker.stop();
+        await _speaker?.stop();
       } catch (_) {}
       if (voicePhase == VoicePhase.speaking) {
         voicePhase = VoicePhase.idle;
@@ -441,6 +541,13 @@ class AssistantController extends ChangeNotifier {
   Future<void> sendTextTurn(String text) async {
     final cleaned = text.trim();
     if (cleaned.isEmpty || busy) {
+      return;
+    }
+    if (!_api.hasAccessToken) {
+      voicePhase = VoicePhase.error;
+      voiceError = 'Please sign in before sending a message.';
+      statusText = voiceError!;
+      _emit();
       return;
     }
     if (voicePhase == VoicePhase.speaking) {
@@ -456,13 +563,17 @@ class AssistantController extends ChangeNotifier {
       lastHeard = turn.transcript.isEmpty ? cleaned : turn.transcript;
       lastReply = turn.replyText;
       if (turn.replyText.trim().isNotEmpty) {
-        addLine(fromYou: false, text: turn.replyText, audioBytes: turn.audioBytes);
+        final replyLine = addLine(
+          fromYou: false,
+          text: turn.replyText,
+          audioBytes: turn.audioBytes,
+        );
         if (!ttsMuted) {
-          if (turn.audioBytes.isNotEmpty) {
-            await speakBytes(turn.audioBytes, text: turn.replyText);
-          } else {
-            await speakText(turn.replyText);
-          }
+          await speakAssistantLine(
+            replyLine,
+            automatic: true,
+            source: 'text-turn',
+          );
         }
       }
       await refreshOverview();
@@ -548,7 +659,9 @@ class AssistantController extends ChangeNotifier {
             _emit();
           }
           if (result.finalResult && words.isNotEmpty) {
-            debugPrint('[STT] Final result recognized (${words.split(" ").length} words)');
+            debugPrint(
+              '[STT] Final result recognized (${words.split(" ").length} words)',
+            );
             _finishListeningSession();
           }
         },
@@ -584,7 +697,14 @@ class AssistantController extends ChangeNotifier {
     }
 
     _turnSubmitted = true;
-    debugPrint('[STT] Submitting recognized voice turn (${transcript.split(" ").length} words)');
+    debugPrint(
+      '[STT] Submitting recognized voice turn (${transcript.split(" ").length} words)',
+    );
+    // A final STT result can arrive before the browser emits its terminal
+    // listening status. Move the panel out of its stale "Hearing" label now.
+    voicePhase = VoicePhase.processing;
+    statusText = 'Thinking';
+    _emit();
     await sendTextTurn(transcript);
   }
 
@@ -633,6 +753,14 @@ class AssistantController extends ChangeNotifier {
         _emit();
         return;
       }
+      if (!_api.hasAccessToken) {
+        busy = false;
+        voicePhase = VoicePhase.error;
+        voiceError = 'Please sign in before sending a message.';
+        statusText = voiceError!;
+        _emit();
+        return;
+      }
       final turn = await _api.sendAudioBytes(audioBytes);
       lastHeard = turn.transcript;
       lastReply = turn.replyText;
@@ -640,13 +768,17 @@ class AssistantController extends ChangeNotifier {
         addLine(fromYou: true, text: turn.transcript);
       }
       if (turn.replyText.trim().isNotEmpty) {
-        addLine(fromYou: false, text: turn.replyText, audioBytes: turn.audioBytes);
+        final replyLine = addLine(
+          fromYou: false,
+          text: turn.replyText,
+          audioBytes: turn.audioBytes,
+        );
         if (!ttsMuted) {
-          if (turn.audioBytes.isNotEmpty) {
-            await speakBytes(turn.audioBytes, text: turn.replyText);
-          } else {
-            await speakText(turn.replyText);
-          }
+          await speakAssistantLine(
+            replyLine,
+            automatic: true,
+            source: 'voice-turn',
+          );
         }
       }
       await refreshOverview();
@@ -767,7 +899,11 @@ class AssistantController extends ChangeNotifier {
     required String relationship,
     String notes = '',
   }) async {
-    await _api.createPerson(name: name, relationship: relationship, notes: notes);
+    await _api.createPerson(
+      name: name,
+      relationship: relationship,
+      notes: notes,
+    );
     _emit();
   }
 
@@ -777,7 +913,12 @@ class AssistantController extends ChangeNotifier {
     required String relationship,
     String notes = '',
   }) async {
-    await _api.updatePerson(id: id, name: name, relationship: relationship, notes: notes);
+    await _api.updatePerson(
+      id: id,
+      name: name,
+      relationship: relationship,
+      notes: notes,
+    );
     _emit();
   }
 
@@ -836,7 +977,10 @@ class AssistantController extends ChangeNotifier {
       await speakBytes(registered.audioBytes);
       await refreshOverview();
     } catch (_) {
-      addLine(fromYou: false, text: 'I could not save that face. Please try again.');
+      addLine(
+        fromYou: false,
+        text: 'I could not save that face. Please try again.',
+      );
     } finally {
       busy = false;
       _emit();
@@ -922,7 +1066,7 @@ class AssistantController extends ChangeNotifier {
     _speech.stop();
     _tts.dispose();
     _mic.dispose();
-    _speaker.dispose();
+    _speaker?.dispose();
     super.dispose();
   }
 }

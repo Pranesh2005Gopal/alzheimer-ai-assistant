@@ -76,6 +76,18 @@ class ReminderManager:
             return self.repo.delete(upcoming[0].id)
         return False
 
+    def update_matching(self, text: str, time_iso: str | None = None) -> Reminder | None:
+        """Update one pending reminder only when the requested new time is valid."""
+        candidates = self.repo.upcoming(20)
+        lowered = text.lower()
+        meaningful = [word for word in re.findall(r"[a-z]+", lowered) if word not in {"change", "update", "reminder", "to", "at", "my", "the"}]
+        chosen = next((item for item in candidates if any(word in f"{item.title} {item.notes}".lower() for word in meaningful)), None)
+        chosen = chosen or (candidates[0] if len(candidates) == 1 else None)
+        if chosen is None or not time_iso:
+            return None
+        chosen.time_iso = time_iso
+        return self.repo.update(chosen)
+
     def mark_next_medication_done(self) -> Reminder | None:
         for reminder in self.repo.upcoming(20):
             if reminder.kind == ReminderKind.MEDICATION:

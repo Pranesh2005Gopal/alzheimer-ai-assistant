@@ -10,6 +10,7 @@ from utils.config import Settings
 class SemanticMemoryStore(Protocol):
     def upsert(self, memory_id: str, text: str, metadata: dict) -> None: ...
     def search(self, query: str, limit: int = 5) -> list[str]: ...
+    def delete(self, memory_id: str) -> None: ...
 
 
 class ChromaSemanticMemory:
@@ -48,6 +49,11 @@ class ChromaSemanticMemory:
         documents = result.get("documents") or [[]]
         return documents[0]
 
+    def delete(self, memory_id: str) -> None:
+        self.load()
+        assert self._collection is not None
+        self._collection.delete(ids=[memory_id])
+
 
 class NullSemanticMemory:
     """Used until Phase 3. Same interface as ChromaSemanticMemory."""
@@ -57,3 +63,6 @@ class NullSemanticMemory:
 
     def search(self, query: str, limit: int = 5) -> list[str]:
         return []
+
+    def delete(self, memory_id: str) -> None:
+        return None

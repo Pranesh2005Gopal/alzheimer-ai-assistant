@@ -47,8 +47,12 @@ class _VoiceScreenState extends State<VoiceScreen> {
   @override
   Widget build(BuildContext context) {
     final controller = AssistantScope.of(context);
-    final hasTamil = controller.availableLocales.any((l) => l.localeId.toLowerCase().startsWith('ta'));
-    final hasEnglish = controller.availableLocales.any((l) => l.localeId.toLowerCase().startsWith('en'));
+    final hasTamil = controller.availableLocales.any(
+      (l) => l.localeId.toLowerCase().startsWith('ta'),
+    );
+    final hasEnglish = controller.availableLocales.any(
+      (l) => l.localeId.toLowerCase().startsWith('en'),
+    );
 
     return ListenableBuilder(
       listenable: controller,
@@ -61,28 +65,41 @@ class _VoiceScreenState extends State<VoiceScreen> {
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                 child: AppCard(
-                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.05),
+                  color: Theme.of(context).colorScheme.primary
+                      .withValues(alpha: 0.05),
                   child: Column(
                     children: [
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           const SizedBox(width: 48),
-                          Text('Voice Assistant', style: Theme.of(context).textTheme.headlineSmall),
+                          Text(
+                            'Voice Assistant',
+                            style: Theme.of(context).textTheme.headlineSmall,
+                          ),
                           Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               if (controller.voicePhase == VoicePhase.speaking)
                                 IconButton(
                                   tooltip: 'Stop speaking',
-                                  icon: const Icon(Icons.stop_circle_rounded, color: Colors.redAccent),
+                                  icon: const Icon(
+                                    Icons.stop_circle_rounded,
+                                    color: Colors.redAccent,
+                                  ),
                                   onPressed: controller.stopSpeaking,
                                 ),
                               IconButton(
-                                tooltip: controller.ttsMuted ? 'Unmute voice' : 'Mute voice',
+                                tooltip: controller.ttsMuted
+                                    ? 'Unmute voice'
+                                    : 'Mute voice',
                                 icon: Icon(
-                                  controller.ttsMuted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
-                                  color: controller.ttsMuted ? Theme.of(context).colorScheme.error : null,
+                                  controller.ttsMuted
+                                      ? Icons.volume_off_rounded
+                                      : Icons.volume_up_rounded,
+                                  color: controller.ttsMuted
+                                      ? Theme.of(context).colorScheme.error
+                                      : null,
                                 ),
                                 onPressed: controller.toggleTtsMute,
                               ),
@@ -106,7 +123,10 @@ class _VoiceScreenState extends State<VoiceScreen> {
                       ),
                       if (controller.voiceError != null) ...[
                         const SizedBox(height: 8),
-                        ErrorState(message: controller.voiceError!, onRetry: controller.onTalkPressed),
+                        ErrorState(
+                          message: controller.voiceError!,
+                          onRetry: controller.onTalkPressed,
+                        ),
                       ],
                       if (controller.blockedAudio != null) ...[
                         const SizedBox(height: 8),
@@ -129,14 +149,34 @@ class _VoiceScreenState extends State<VoiceScreen> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      Text('Language: ', style: Theme.of(context).textTheme.labelMedium),
+                      Text(
+                        'Language: ',
+                        style: Theme.of(context).textTheme.labelMedium,
+                      ),
                       DropdownButton<String>(
-                        value: controller.selectedLocaleId.toLowerCase().startsWith('ta') ? 'ta' : 'en',
+                        value:
+                            controller.selectedLocaleId
+                                .toLowerCase()
+                                .startsWith('ta')
+                            ? 'ta'
+                            : 'en',
                         isDense: true,
                         underline: const SizedBox(),
                         items: const [
-                          DropdownMenuItem(value: 'en', child: Text('English', style: TextStyle(fontSize: 13))),
-                          DropdownMenuItem(value: 'ta', child: Text('தமிழ்', style: TextStyle(fontSize: 13))),
+                          DropdownMenuItem(
+                            value: 'en',
+                            child: Text(
+                              'English',
+                              style: TextStyle(fontSize: 13),
+                            ),
+                          ),
+                          DropdownMenuItem(
+                            value: 'ta',
+                            child: Text(
+                              'தமிழ்',
+                              style: TextStyle(fontSize: 13),
+                            ),
+                          ),
                         ],
                         onChanged: (lang) {
                           if (lang == null) return;
@@ -148,11 +188,17 @@ class _VoiceScreenState extends State<VoiceScreen> {
                             );
                           } else {
                             target = controller.availableLocales.firstWhere(
-                              (l) => l.localeId.toLowerCase().contains('en_in') || l.localeId.toLowerCase().contains('en-in'),
-                              orElse: () => controller.availableLocales.firstWhere(
-                                (l) => l.localeId.toLowerCase().startsWith('en'),
-                                orElse: () => controller.availableLocales.first,
-                              ),
+                              (l) =>
+                                  l.localeId.toLowerCase().contains('en_in') ||
+                                  l.localeId.toLowerCase().contains('en-in'),
+                              orElse: () =>
+                                  controller.availableLocales.firstWhere(
+                                    (l) => l.localeId.toLowerCase().startsWith(
+                                      'en',
+                                    ),
+                                    orElse: () =>
+                                        controller.availableLocales.first,
+                                  ),
                             );
                           }
                           controller.setSelectedLocale(target.localeId);
@@ -193,16 +239,29 @@ class _VoiceScreenState extends State<VoiceScreen> {
 
               // Text input with speech-to-text mic button
               Padding(
-                padding: EdgeInsets.fromLTRB(16, 8, 16, MediaQuery.viewInsetsOf(context).bottom + 12),
+                padding: EdgeInsets.fromLTRB(
+                  16,
+                  8,
+                  16,
+                  MediaQuery.viewInsetsOf(context).bottom + 12,
+                ),
                 child: Row(
                   children: [
                     // Speech-to-text mic button beside input field
                     IconButton.filledTonal(
-                      tooltip: controller.listening ? 'Stop listening' : 'Speak message',
-                      onPressed: controller.busy && !controller.listening ? null : controller.onTalkPressed,
+                      tooltip: controller.listening
+                          ? 'Stop listening'
+                          : 'Speak message',
+                      onPressed: controller.busy && !controller.listening
+                          ? null
+                          : controller.onTalkPressed,
                       icon: Icon(
-                        controller.listening ? Icons.stop_rounded : Icons.mic_none_rounded,
-                        color: controller.listening ? Theme.of(context).colorScheme.error : null,
+                        controller.listening
+                            ? Icons.stop_rounded
+                            : Icons.mic_none_rounded,
+                        color: controller.listening
+                            ? Theme.of(context).colorScheme.error
+                            : null,
                       ),
                       style: IconButton.styleFrom(
                         minimumSize: const Size(48, 48),
@@ -217,10 +276,17 @@ class _VoiceScreenState extends State<VoiceScreen> {
                         controller: _text,
                         textInputAction: TextInputAction.send,
                         decoration: InputDecoration(
-                          hintText: controller.listening ? 'Listening… speak now' : 'Type or speak a message…',
+                          hintText: controller.listening
+                              ? 'Listening… speak now'
+                              : 'Type or speak a message…',
                           filled: true,
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(24)),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(24),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 18,
+                            vertical: 14,
+                          ),
                         ),
                         onSubmitted: (_) => _sendText(controller),
                       ),
@@ -228,9 +294,13 @@ class _VoiceScreenState extends State<VoiceScreen> {
                     const SizedBox(width: 8),
                     IconButton.filled(
                       tooltip: 'Send',
-                      onPressed: controller.busy ? null : () => _sendText(controller),
+                      onPressed: controller.busy
+                          ? null
+                          : () => _sendText(controller),
                       icon: const Icon(Icons.send_rounded),
-                      style: IconButton.styleFrom(minimumSize: const Size(52, 52)),
+                      style: IconButton.styleFrom(
+                        minimumSize: const Size(52, 52),
+                      ),
                     ),
                   ],
                 ),
@@ -251,20 +321,14 @@ class _PhaseBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (phase == VoicePhase.processing || phase == VoicePhase.speaking) {
-      return const SizedBox(
-        height: 4,
-        child: LinearProgressIndicator(),
-      );
+      return const SizedBox(height: 4, child: LinearProgressIndicator());
     }
     return const SizedBox(height: 4);
   }
 }
 
 class _ChatBubble extends StatelessWidget {
-  const _ChatBubble({
-    required this.line,
-    required this.controller,
-  });
+  const _ChatBubble({required this.line, required this.controller});
 
   final ChatLine line;
   final AssistantController controller;
@@ -273,24 +337,33 @@ class _ChatBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final isAssistant = !line.fromYou;
-    final isSpeakingThis = isAssistant &&
+    final isSpeakingThis =
+        isAssistant &&
         controller.voicePhase == VoicePhase.speaking &&
-        controller.currentlySpeakingText == line.text;
+        controller.currentlySpeakingLineId == line.id;
 
     return Align(
       alignment: line.fromYou ? Alignment.centerRight : Alignment.centerLeft,
       child: ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * 0.85),
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.sizeOf(context).width * 0.85,
+        ),
         child: Container(
           margin: const EdgeInsets.only(bottom: 10),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
-            color: line.fromYou ? scheme.primary.withValues(alpha: 0.12) : scheme.surfaceContainerHighest,
+            color: line.fromYou
+                ? scheme.primary.withValues(alpha: 0.12)
+                : scheme.surfaceContainerHighest,
             borderRadius: BorderRadius.only(
               topLeft: const Radius.circular(18),
               topRight: const Radius.circular(18),
-              bottomLeft: line.fromYou ? const Radius.circular(18) : const Radius.circular(4),
-              bottomRight: line.fromYou ? const Radius.circular(4) : const Radius.circular(18),
+              bottomLeft: line.fromYou
+                  ? const Radius.circular(18)
+                  : const Radius.circular(4),
+              bottomRight: line.fromYou
+                  ? const Radius.circular(4)
+                  : const Radius.circular(18),
             ),
           ),
           child: Column(
@@ -301,7 +374,8 @@ class _ChatBubble extends StatelessWidget {
                 children: [
                   Text(
                     line.fromYou ? 'You' : 'Assistant',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w700),
+                    style: Theme.of(context).textTheme.bodySmall
+                        ?.copyWith(fontWeight: FontWeight.w700),
                   ),
                   if (isSpeakingThis) ...[
                     const SizedBox(width: 8),
@@ -323,22 +397,34 @@ class _ChatBubble extends StatelessWidget {
                     if (isSpeakingThis)
                       TextButton.icon(
                         style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
                           visualDensity: VisualDensity.compact,
                         ),
                         onPressed: controller.stopSpeaking,
                         icon: const Icon(Icons.stop_circle_outlined, size: 18),
-                        label: const Text('Stop', style: TextStyle(fontSize: 12)),
+                        label: const Text(
+                          'Stop',
+                          style: TextStyle(fontSize: 12),
+                        ),
                       )
                     else
                       TextButton.icon(
                         style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
                           visualDensity: VisualDensity.compact,
                         ),
                         onPressed: () => controller.replayLine(line),
                         icon: const Icon(Icons.volume_up_outlined, size: 18),
-                        label: const Text('Replay', style: TextStyle(fontSize: 12)),
+                        label: const Text(
+                          'Replay',
+                          style: TextStyle(fontSize: 12),
+                        ),
                       ),
                   ],
                 ),

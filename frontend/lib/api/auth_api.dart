@@ -19,9 +19,11 @@ class AuthApiException implements Exception {
 }
 
 class AuthApi {
-  AuthApi({required this.baseUrl});
+  AuthApi({required this.baseUrl, http.Client? client})
+    : _client = client ?? http.Client();
 
   final String baseUrl;
+  final http.Client _client;
   String? _token;
   String? _privateGrant;
   DateTime? _grantExpiry;
@@ -100,44 +102,64 @@ class AuthApi {
   // ---------------------------------------------------------------------------
 
   Map<String, String> get _headers => {
-        'Content-Type': 'application/json',
-        if (_token != null) 'Authorization': 'Bearer $_token',
-      };
+    'Content-Type': 'application/json',
+    if (_token != null) 'Authorization': 'Bearer $_token',
+  };
 
-  Future<Map<String, dynamic>> _post(String path, Map<String, dynamic> body) async {
+  Future<Map<String, dynamic>> _post(
+    String path,
+    Map<String, dynamic> body,
+  ) async {
     try {
-      final resp = await http
-          .post(Uri.parse('$baseUrl$path'), headers: _headers, body: jsonEncode(body))
+      final resp = await _client
+          .post(
+            Uri.parse('$baseUrl$path'),
+            headers: _headers,
+            body: jsonEncode(body),
+          )
           .timeout(const Duration(seconds: 15));
       return _handle(resp);
     } on SocketException {
-      throw const AuthApiException('Cannot reach server. Check your connection.');
+      throw const AuthApiException(
+        'Cannot reach server. Check your connection.',
+      );
     }
   }
 
-  Future<Map<String, dynamic>> _get(String path, {Map<String, String>? query}) async {
+  Future<Map<String, dynamic>> _get(
+    String path, {
+    Map<String, String>? query,
+  }) async {
     try {
       var uri = Uri.parse('$baseUrl$path');
       if (query != null) uri = uri.replace(queryParameters: query);
-      final resp = await http
+      final resp = await _client
           .get(uri, headers: _headers)
           .timeout(const Duration(seconds: 15));
       return _handle(resp);
     } on SocketException {
-      throw const AuthApiException('Cannot reach server. Check your connection.');
+      throw const AuthApiException(
+        'Cannot reach server. Check your connection.',
+      );
     }
   }
 
-  Future<Map<String, dynamic>> _patch(String path, Map<String, dynamic> body, {Map<String, String>? query}) async {
+  Future<Map<String, dynamic>> _patch(
+    String path,
+    Map<String, dynamic> body, {
+    Map<String, String>? query,
+  }) async {
     try {
       var uri = Uri.parse('$baseUrl$path');
       if (query != null) uri = uri.replace(queryParameters: query);
-      final resp = await http
+      final resp = await _client
           .patch(uri, headers: _headers, body: jsonEncode(body))
           .timeout(const Duration(seconds: 15));
       return _handle(resp);
     } on SocketException {
-      throw const AuthApiException('Cannot reach server. Check your connection.');
+      throw const AuthApiException(
+        'Cannot reach server. Check your connection.',
+      );
     }
   }
 
@@ -256,7 +278,10 @@ class AuthApi {
   // Caregiver permissions
   // ---------------------------------------------------------------------------
 
-  Future<void> setCaregiverPermissions(String caregiverId, List<String> permissions) async {
+  Future<void> setCaregiverPermissions(
+    String caregiverId,
+    List<String> permissions,
+  ) async {
     await _post('/v1/profile/caregiver-permissions', {
       'caregiver_id': caregiverId,
       'permissions': permissions,
@@ -274,8 +299,14 @@ class AuthApi {
     return UserProfile.fromJson(data['profile'] as Map<String, dynamic>? ?? {});
   }
 
-  Future<PrivateInfo> getCaregiverPatientPrivate(String patientId, {required String grant}) async {
-    final data = await _get('/v1/caregiver/$patientId/private', query: {'private_grant': grant});
+  Future<PrivateInfo> getCaregiverPatientPrivate(
+    String patientId, {
+    required String grant,
+  }) async {
+    final data = await _get(
+      '/v1/caregiver/$patientId/private',
+      query: {'private_grant': grant},
+    );
     return PrivateInfo.fromJson(data['private'] as Map<String, dynamic>? ?? {});
   }
 

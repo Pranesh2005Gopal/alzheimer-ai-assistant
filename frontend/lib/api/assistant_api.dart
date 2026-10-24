@@ -34,9 +34,31 @@ class VoiceTurn {
 }
 
 class AssistantApi {
-  AssistantApi({String? baseUrl}) : baseUrl = _normalize(baseUrl ?? defaultBase());
+  AssistantApi({
+    String? baseUrl,
+    String? Function()? tokenProvider,
+    http.Client? client,
+  }) : baseUrl = _normalize(baseUrl ?? defaultBase()),
+       _tokenProvider = tokenProvider,
+       _client = client ?? http.Client();
 
   String baseUrl;
+  final String? Function()? _tokenProvider;
+  final http.Client _client;
+
+  bool get hasAccessToken =>
+      (_tokenProvider?.call()?.trim().isNotEmpty ?? false);
+
+  Map<String, String> _protectedHeaders({bool json = false}) {
+    final token = _tokenProvider?.call()?.trim();
+    if (token == null || token.isEmpty) {
+      throw HttpException('Please sign in before contacting the assistant.');
+    }
+    return {
+      if (json) 'Content-Type': 'application/json',
+      'Authorization': 'Bearer $token',
+    };
+  }
 
   static String defaultBase() {
     const fromEnv = String.fromEnvironment('API_BASE');
@@ -59,22 +81,35 @@ class AssistantApi {
 
   Future<HealthStatus> health() async {
     try {
-      final response = await http.get(Uri.parse('$baseUrl/health')).timeout(const Duration(seconds: 4));
+      final response = await http
+          .get(Uri.parse('$baseUrl/health'))
+          .timeout(const Duration(seconds: 4));
       if (response.statusCode != 200) {
-        return HealthStatus.offline('Health check failed (${response.statusCode})');
+        return HealthStatus.offline(
+          'Health check failed (${response.statusCode})',
+        );
       }
-      return HealthStatus.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+      return HealthStatus.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
     } catch (error) {
       return HealthStatus.offline('Cannot reach assistant at $baseUrl');
     }
   }
 
   Future<OverviewData> overview() async {
-    final response = await http.get(Uri.parse('$baseUrl/v1/patient/overview')).timeout(const Duration(seconds: 20));
+    final response = await _client
+        .get(
+          Uri.parse('$baseUrl/v1/patient/overview'),
+          headers: _protectedHeaders(),
+        )
+        .timeout(const Duration(seconds: 20));
     if (response.statusCode != 200) {
       throw HttpException('Overview failed (${response.statusCode})');
     }
-    return OverviewData.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    return OverviewData.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
   }
 
   Future<VoiceTurn> sendAudio(File wavFile) async {
@@ -82,7 +117,11 @@ class AssistantApi {
   }
 
   Future<VoiceTurn> sendAudioBytes(List<int> bytes) async {
-    final request = http.MultipartRequest('POST', Uri.parse('$baseUrl/v1/voice/turn'));
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('$baseUrl/v1/voice/turn'),
+    );
+    request.headers.addAll(_protectedHeaders());
     request.files.add(
       http.MultipartFile.fromBytes('audio', bytes, filename: 'speech.wav'),
     );
@@ -90,25 +129,36 @@ class AssistantApi {
   }
 
   Future<VoiceTurn> sendText(String text) async {
-    final response = await http
+    final response = await _client
         .post(
           Uri.parse('$baseUrl/v1/text/turn'),
-          headers: {'Content-Type': 'application/json'},
+          headers: _protectedHeaders(json: true),
           body: jsonEncode({'text': text}),
         )
         .timeout(const Duration(minutes: 10));
     if (response.statusCode != 200) {
-      throw HttpException('Text turn failed (${response.statusCode}): ${response.body}');
+      throw HttpException(
+        'Text turn failed (${response.statusCode}): ${response.body}',
+      );
     }
-    return VoiceTurn.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    return VoiceTurn.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
   }
 
   Future<FaceRecognitionResult> recognizeFace(List<int> imageBytes) async {
-    final request = http.MultipartRequest('POST', Uri.parse('$baseUrl/v1/vision/recognize'));
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('$baseUrl/v1/vision/recognize'),
+    );
     request.files.add(
       http.MultipartFile.fromBytes('image', imageBytes, filename: 'face.jpg'),
     );
-    return _sendMultipart(request, 'Face recognition', FaceRecognitionResult.fromJson);
+    return _sendMultipart(
+      request,
+      'Face recognition',
+      FaceRecognitionResult.fromJson,
+    );
   }
 
   Future<FaceRecognitionResult> recognizeFromCamera() async {
@@ -116,9 +166,13 @@ class AssistantApi {
         .post(Uri.parse('$baseUrl/v1/vision/recognize-camera'))
         .timeout(const Duration(seconds: 45));
     if (response.statusCode != 200) {
-      throw HttpException('Face recognition failed (${response.statusCode}): ${response.body}');
+      throw HttpException(
+        'Face recognition failed (${response.statusCode}): ${response.body}',
+      );
     }
-    return FaceRecognitionResult.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    return FaceRecognitionResult.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
   }
 
   Future<List<KnownPerson>> listPeople() async {
@@ -127,7 +181,9 @@ class AssistantApi {
       throw HttpException('People list failed (${response.statusCode})');
     }
     final data = jsonDecode(response.body) as List<dynamic>;
-    return data.map((row) => KnownPerson.fromJson(row as Map<String, dynamic>)).toList();
+    return data
+        .map((row) => KnownPerson.fromJson(row as Map<String, dynamic>))
+        .toList();
   }
 
   Future<FaceRecognitionResult> registerFace({
@@ -137,7 +193,10 @@ class AssistantApi {
     String relationship = '',
     String notes = '',
   }) async {
-    final request = http.MultipartRequest('POST', Uri.parse('$baseUrl/v1/vision/register'));
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('$baseUrl/v1/vision/register'),
+    );
     request.fields['name'] = name;
     request.fields['relationship'] = relationship;
     request.fields['notes'] = notes;
@@ -145,7 +204,11 @@ class AssistantApi {
     request.files.add(
       http.MultipartFile.fromBytes('image', imageBytes, filename: 'face.jpg'),
     );
-    return _sendMultipart(request, 'Face registration', FaceRecognitionResult.fromJson);
+    return _sendMultipart(
+      request,
+      'Face registration',
+      FaceRecognitionResult.fromJson,
+    );
   }
 
   Future<KnownPerson> createPerson({
@@ -156,12 +219,20 @@ class AssistantApi {
     final response = await http.post(
       Uri.parse('$baseUrl/v1/vision/people'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'name': name, 'relationship': relationship, 'notes': notes}),
+      body: jsonEncode({
+        'name': name,
+        'relationship': relationship,
+        'notes': notes,
+      }),
     );
     if (response.statusCode != 200) {
-      throw HttpException('Could not create person (${response.statusCode}): ${response.body}');
+      throw HttpException(
+        'Could not create person (${response.statusCode}): ${response.body}',
+      );
     }
-    return KnownPerson.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    return KnownPerson.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
   }
 
   Future<KnownPerson> updatePerson({
@@ -173,25 +244,41 @@ class AssistantApi {
     final response = await http.put(
       Uri.parse('$baseUrl/v1/vision/people/$id'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'name': name, 'relationship': relationship, 'notes': notes}),
+      body: jsonEncode({
+        'name': name,
+        'relationship': relationship,
+        'notes': notes,
+      }),
     );
     if (response.statusCode != 200) {
-      throw HttpException('Could not update person (${response.statusCode}): ${response.body}');
+      throw HttpException(
+        'Could not update person (${response.statusCode}): ${response.body}',
+      );
     }
-    return KnownPerson.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    return KnownPerson.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
   }
 
   Future<void> deletePerson(String id) async {
-    final response = await http.delete(Uri.parse('$baseUrl/v1/vision/people/$id'));
+    final response = await http.delete(
+      Uri.parse('$baseUrl/v1/vision/people/$id'),
+    );
     if (response.statusCode != 200) {
-      throw HttpException('Could not delete person (${response.statusCode}): ${response.body}');
+      throw HttpException(
+        'Could not delete person (${response.statusCode}): ${response.body}',
+      );
     }
   }
 
   Future<void> deletePersonFace(String id) async {
-    final response = await http.delete(Uri.parse('$baseUrl/v1/vision/people/$id/face'));
+    final response = await http.delete(
+      Uri.parse('$baseUrl/v1/vision/people/$id/face'),
+    );
     if (response.statusCode != 200) {
-      throw HttpException('Could not remove face (${response.statusCode}): ${response.body}');
+      throw HttpException(
+        'Could not remove face (${response.statusCode}): ${response.body}',
+      );
     }
   }
 
@@ -202,21 +289,35 @@ class AssistantApi {
     String relationship = '',
     String notes = '',
   }) async {
-    final request = http.MultipartRequest('POST', Uri.parse('$baseUrl/v1/vision/register-samples'));
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('$baseUrl/v1/vision/register-samples'),
+    );
     request.fields['name'] = name;
     request.fields['relationship'] = relationship;
     request.fields['notes'] = notes;
     request.fields['person_id'] = personId;
     for (int i = 0; i < imagesBytesList.length; i++) {
       request.files.add(
-        http.MultipartFile.fromBytes('images', imagesBytesList[i], filename: 'face_$i.jpg'),
+        http.MultipartFile.fromBytes(
+          'images',
+          imagesBytesList[i],
+          filename: 'face_$i.jpg',
+        ),
       );
     }
-    return _sendMultipart(request, 'Multi-sample face registration', FaceRecognitionResult.fromJson);
+    return _sendMultipart(
+      request,
+      'Multi-sample face registration',
+      FaceRecognitionResult.fromJson,
+    );
   }
 
   Future<List<ReminderItem>> listReminders() async {
-    final response = await http.get(Uri.parse('$baseUrl/v1/reminders'));
+    final response = await http.get(
+      Uri.parse('$baseUrl/v1/reminders'),
+      headers: _protectedHeaders(),
+    );
     return _mapList(response, 'Reminders', 'reminders', ReminderItem.fromJson);
   }
 
@@ -230,7 +331,7 @@ class AssistantApi {
   }) async {
     final response = await http.post(
       Uri.parse('$baseUrl/v1/reminders'),
-      headers: {'Content-Type': 'application/json'},
+      headers: _protectedHeaders(json: true),
       body: jsonEncode({
         'title': title,
         'time_iso': timeIso,
@@ -241,29 +342,47 @@ class AssistantApi {
       }),
     );
     if (response.statusCode != 200) {
-      throw HttpException('Could not create reminder (${response.statusCode}): ${response.body}');
+      throw HttpException(
+        'Could not create reminder (${response.statusCode}): ${response.body}',
+      );
     }
     final data = jsonDecode(response.body) as Map<String, dynamic>;
     return ReminderItem.fromJson(data['reminder'] as Map<String, dynamic>);
   }
 
   Future<ReminderItem> completeReminder(String id) async {
-    final response = await http.post(Uri.parse('$baseUrl/v1/reminders/$id/complete'));
+    final response = await http.post(
+      Uri.parse('$baseUrl/v1/reminders/$id/complete'),
+      headers: _protectedHeaders(),
+    );
     if (response.statusCode != 200) {
-      throw HttpException('Could not complete reminder (${response.statusCode})');
+      throw HttpException(
+        'Could not complete reminder (${response.statusCode})',
+      );
     }
     final data = jsonDecode(response.body) as Map<String, dynamic>;
     return ReminderItem.fromJson(data['reminder'] as Map<String, dynamic>);
   }
 
   Future<bool> deleteReminder(String id) async {
-    final response = await http.delete(Uri.parse('$baseUrl/v1/reminders/$id'));
+    final response = await http.delete(
+      Uri.parse('$baseUrl/v1/reminders/$id'),
+      headers: _protectedHeaders(),
+    );
     return response.statusCode == 200;
   }
 
   Future<List<AppointmentItem>> listAppointments() async {
-    final response = await http.get(Uri.parse('$baseUrl/v1/appointments'));
-    return _mapList(response, 'Appointments', 'appointments', AppointmentItem.fromJson);
+    final response = await http.get(
+      Uri.parse('$baseUrl/v1/appointments'),
+      headers: _protectedHeaders(),
+    );
+    return _mapList(
+      response,
+      'Appointments',
+      'appointments',
+      AppointmentItem.fromJson,
+    );
   }
 
   Future<AppointmentItem> createAppointment({
@@ -275,7 +394,7 @@ class AssistantApi {
   }) async {
     final response = await http.post(
       Uri.parse('$baseUrl/v1/appointments'),
-      headers: {'Content-Type': 'application/json'},
+      headers: _protectedHeaders(json: true),
       body: jsonEncode({
         'doctor': doctor,
         'date_iso': dateIso,
@@ -285,23 +404,33 @@ class AssistantApi {
       }),
     );
     if (response.statusCode != 200) {
-      throw HttpException('Could not schedule appointment (${response.statusCode})');
+      throw HttpException(
+        'Could not schedule appointment (${response.statusCode})',
+      );
     }
     final data = jsonDecode(response.body) as Map<String, dynamic>;
-    return AppointmentItem.fromJson(data['appointment'] as Map<String, dynamic>);
+    return AppointmentItem.fromJson(
+      data['appointment'] as Map<String, dynamic>,
+    );
   }
 
-  Future<bool> addCareNote({required String note, String category = 'observation'}) async {
+  Future<bool> addCareNote({
+    required String note,
+    String category = 'observation',
+  }) async {
     final response = await http.post(
       Uri.parse('$baseUrl/v1/care/notes'),
-      headers: {'Content-Type': 'application/json'},
+      headers: _protectedHeaders(json: true),
       body: jsonEncode({'note': note, 'category': category}),
     );
     return response.statusCode == 200;
   }
 
   Future<Map<String, dynamic>> memory() async {
-    final response = await http.get(Uri.parse('$baseUrl/v1/memory'));
+    final response = await http.get(
+      Uri.parse('$baseUrl/v1/memory'),
+      headers: _protectedHeaders(),
+    );
     if (response.statusCode != 200) {
       throw HttpException('Memory failed (${response.statusCode})');
     }
@@ -311,35 +440,52 @@ class AssistantApi {
   Future<String> addMemoryNote(String text) async {
     final response = await http.post(
       Uri.parse('$baseUrl/v1/memory/notes'),
-      headers: {'Content-Type': 'application/json'},
+      headers: _protectedHeaders(json: true),
       body: jsonEncode({'text': text}),
     );
     if (response.statusCode != 200) {
-      throw HttpException('Could not store memory note (${response.statusCode})');
+      throw HttpException(
+        'Could not store memory note (${response.statusCode})',
+      );
     }
-    return (jsonDecode(response.body) as Map<String, dynamic>)['message'] as String? ?? 'Stored.';
+    return (jsonDecode(response.body) as Map<String, dynamic>)['message']
+            as String? ??
+        'Stored.';
   }
 
   Future<List<ActivityItem>> activity({int limit = 50}) async {
-    final response = await http.get(Uri.parse('$baseUrl/v1/activity?limit=$limit'));
+    final response = await http.get(
+      Uri.parse('$baseUrl/v1/activity?limit=$limit'),
+      headers: _protectedHeaders(),
+    );
     return _mapList(response, 'Activity', 'events', ActivityItem.fromJson);
   }
 
   Future<List<ConversationTurnItem>> conversation() async {
-    final response = await http.get(Uri.parse('$baseUrl/v1/conversation'));
-    return _mapList(response, 'Conversation', 'turns', ConversationTurnItem.fromJson);
+    final response = await http.get(
+      Uri.parse('$baseUrl/v1/conversation'),
+      headers: _protectedHeaders(),
+    );
+    return _mapList(
+      response,
+      'Conversation',
+      'turns',
+      ConversationTurnItem.fromJson,
+    );
   }
 
   Future<String> setPreferredName(String name) async {
     final response = await http.post(
       Uri.parse('$baseUrl/v1/profile/name'),
-      headers: {'Content-Type': 'application/json'},
+      headers: _protectedHeaders(json: true),
       body: jsonEncode({'preferred_name': name}),
     );
     if (response.statusCode != 200) {
       throw HttpException('Could not update name (${response.statusCode})');
     }
-    return (jsonDecode(response.body) as Map<String, dynamic>)['preferred_name'] as String? ?? name;
+    return (jsonDecode(response.body) as Map<String, dynamic>)['preferred_name']
+            as String? ??
+        name;
   }
 
   Future<List<T>> _mapList<T>(
@@ -361,17 +507,14 @@ class AssistantApi {
     String label,
     T Function(Map<String, dynamic>) parse,
   ) async {
-    final client = http.Client();
-    try {
-      final streamed = await client.send(request).timeout(const Duration(minutes: 10));
-      final body = await streamed.stream.bytesToString();
-      if (streamed.statusCode != 200) {
-        throw HttpException('$label failed (${streamed.statusCode}): $body');
-      }
-      return parse(jsonDecode(body) as Map<String, dynamic>);
-    } finally {
-      client.close();
+    final streamed = await _client
+        .send(request)
+        .timeout(const Duration(minutes: 10));
+    final body = await streamed.stream.bytesToString();
+    if (streamed.statusCode != 200) {
+      throw HttpException('$label failed (${streamed.statusCode}): $body');
     }
+    return parse(jsonDecode(body) as Map<String, dynamic>);
   }
 }
 

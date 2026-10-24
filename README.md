@@ -22,7 +22,7 @@ Read **[docs/TOOLS.md](docs/TOOLS.md)** for a full page per tool. Short map:
 | **FaceNet** | Face embeddings + match (Phase 4) | Medical claims; 100% accuracy |
 | **Isolation Forest** | Unusual activity flag (Phase 7) | Diagnosing Alzheimer's |
 
-## Phase 1 (what works now)
+## Conversation, memory, and reminders
 
 ```
 Microphone → Whisper → spaCy + DistilBERT + Duckling
@@ -51,7 +51,9 @@ docs/              TOOLS, SETUP, PHASES
 scripts/           train DistilBERT, run API
 ```
 
-Repositories are interfaces. Phase 1 uses in-memory + JSON seed. Later you can attach SQLite, PostgreSQL, MongoDB, or persistent Chroma without rewriting services.
+The local deployment persists mutable records in `data/assistant_state.json` and the most recent 50 conversation messages in `data/conversations.json`. Both files are written atomically and are ignored by Git. The seed file is read only on the first run; it is never overwritten.
+
+Text and voice use the same pipeline. Reminders are created, updated, completed, and deleted through the reminder service before a confirmation is spoken. If the local LLM is unavailable, the assistant says so plainly instead of returning a misleading generic reply.
 
 ## Quick start
 
