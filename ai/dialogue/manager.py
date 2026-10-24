@@ -16,6 +16,7 @@ from models.nlu import NLUResult
 from services.appointment_service import AppointmentService
 from services.emergency_service import EmergencyService
 from services.memory_service import MemoryService
+from services.patient_context import PatientContextService
 from services.reminder_manager import ReminderManager
 
 _READ_INTENTS = {
@@ -58,11 +59,13 @@ class DialogueManager:
         appointments: AppointmentService,
         memory: MemoryService,
         emergency: EmergencyService,
+        patient_context: PatientContextService | None = None,
     ) -> None:
         self.reminders = reminders
         self.appointments = appointments
         self.memory = memory
         self.emergency = emergency
+        self.patient_context = patient_context
         self.state = DialogueState()
 
     def handle(self, nlu: NLUResult) -> DialogueDecision:
@@ -70,6 +73,18 @@ class DialogueManager:
         lowered = re.sub(r"[.!?]+$", "", text.lower().strip()).strip()
 
         self._remember_from_speech(text)
+
+        # Personal questions are answered from the authenticated patient's
+        # saved application records before intent classification or the LLM.
+        if self.patient_context is not None:
+            answer = self.patient_context.answer(text)
+            if answer is not None:
+                return DialogueDecision(
+                    user_prompt_for_llm="Say the saved patient information below in the same words.",
+                    facts=answer.text,
+                    status=answer.status,
+                    extras={"verbatim": True, "patient_context_category": answer.category},
+                )
 
         if self.state.awaiting_emergency_confirm:
             return self._finish_emergency_confirm(lowered)

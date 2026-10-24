@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 from backend.container import get_container
 from backend.auth.dependencies import PatientAccess, get_patient_access
+from backend.auth.store import update_profile
 from models.domain import ReminderKind
 
 router = APIRouter(tags=["care"])
@@ -190,7 +191,9 @@ def memory_overview(access: PatientAccess = Depends(get_patient_access)) -> dict
     container = get_container(access.patient_id)
     repo = container.repos.memory
     return {
-        "patient_name": container.memory.patient_display_name()
+        "patient_name": access.user.get("profile", {}).get("preferred_name")
+        or access.user.get("profile", {}).get("full_name")
+        or container.memory.patient_display_name()
         or container.repos.patient.get_profile().preferred_name,
         "people": [
             {
@@ -280,9 +283,10 @@ def conversation_history(access: PatientAccess = Depends(get_patient_access)) ->
 
 @router.post("/profile/name")
 def set_preferred_name(body: PreferredNameRequest, access: PatientAccess = Depends(get_patient_access)) -> dict:
+    # Keep this legacy settings endpoint on the same authoritative profile
+    # record as the Profile screen and PatientContextService.
+    preferred_name = body.preferred_name.strip()
+    updated = update_profile(access.patient_id, {"preferred_name": preferred_name})
     container = get_container(access.patient_id)
-    message = container.memory.set_preferred_name(body.preferred_name)
-    if not message:
-        raise HTTPException(status_code=400, detail="A name is required.")
-    container.activity.log("memory", message, {"key": "preferred_name"})
-    return {"message": message, "preferred_name": body.preferred_name.strip()}
+    container.activity.log("profile", "Preferred name updated", {"key": "preferred_name"})
+    return {"message": "Preferred name updated.", "preferred_name": updated["profile"]["preferred_name"]}

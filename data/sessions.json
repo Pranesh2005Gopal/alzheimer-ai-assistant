@@ -112,5 +112,17 @@
     "role": "patient",
     "created_at": "2026-10-24T09:38:04+00:00",
     "last_seen": 1792835132.163549
+  },
+  "gaJQfMe9PR8CziKszwbJGZAXjbGzjIg9Q_-eBd45jdo": {
+    "user_id": "b65f5da1a090404e",
+    "role": "patient",
+    "created_at": "2026-10-24T09:57:09+00:00",
+    "last_seen": 1792836025.1828322
+  },
+  "watEEsXTKda9kU7hoPPxsw1ib17iZXo0PB6d1n6KOmc": {
+    "user_id": "b65f5da1a090404e",
+    "role": "patient",
+    "created_at": "2026-10-24T12:08:46+00:00",
+    "last_seen": 1792843911.8099284
   }
 }

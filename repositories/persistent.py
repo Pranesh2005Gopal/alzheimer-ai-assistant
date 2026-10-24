@@ -10,13 +10,28 @@ import json
 import os
 from pathlib import Path
 from models.domain import Appointment, ConversationTurn, ImportantDate, Person, Preference, Reminder, ReminderKind, ReminderStatus
-from repositories.in_memory import RepositoryBundle, load_seed
+from repositories.in_memory import (
+    InMemoryActivityRepository,
+    InMemoryAppointmentRepository,
+    InMemoryMemoryRepository,
+    InMemoryPatientRepository,
+    InMemoryReminderRepository,
+    RepositoryBundle,
+    load_seed,
+)
+from models.domain import PatientProfile
 
 
 class PersistentRepositoryBundle(RepositoryBundle):
-    def __init__(self, seed_path: Path, state_path: Path) -> None:
+    def __init__(self, seed_path: Path, state_path: Path, *, use_seed: bool = True, patient_id: str = "patient-1") -> None:
         self._state_path = state_path
-        base = load_seed(seed_path)
+        base = load_seed(seed_path) if use_seed else RepositoryBundle(
+            InMemoryMemoryRepository(),
+            InMemoryReminderRepository(),
+            InMemoryAppointmentRepository(),
+            InMemoryPatientRepository(PatientProfile(id=patient_id, preferred_name="")),
+            InMemoryActivityRepository(),
+        )
         if state_path.exists():
             raw = json.loads(state_path.read_text(encoding="utf-8"))
             # A state file is an overlay: seed data remains the safe first-run default.

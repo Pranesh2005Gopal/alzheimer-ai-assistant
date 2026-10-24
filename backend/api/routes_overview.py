@@ -38,7 +38,10 @@ def patient_overview(access: PatientAccess = Depends(get_patient_access)) -> dic
             container.reminders.mark_speech_sent(due.id)
             container.activity.log("reminder", message, {"reminder_id": due.id})
     profile = container.repos.patient.get_profile()
-    patient_name = container.memory.patient_display_name() or profile.preferred_name
+    # The authenticated profile is the source edited by the Profile screen.
+    # Do not show a seed/default name after a patient has changed it.
+    auth_profile = access.user.get("profile", {})
+    patient_name = auth_profile.get("preferred_name") or auth_profile.get("full_name") or container.memory.patient_display_name() or profile.preferred_name
     reminders = [_reminder_summary(item) for item in container.repos.reminders.list_all()]
     reminders.sort(key=lambda row: row["time"])
     appointments = [
