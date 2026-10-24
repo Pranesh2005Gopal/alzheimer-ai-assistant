@@ -15,8 +15,10 @@ class PlatformTtsWeb implements PlatformTts {
   void Function(String error)? _onError;
 
   web.SpeechSynthesisUtterance? _activeUtterance;
+  Completer<void>? _activeCompleter;
   Timer? _keepAliveTimer;
   List<web.SpeechSynthesisVoice> _voices = [];
+  int _utteranceId = 0;
 
   @override
   Future<void> init({
@@ -63,7 +65,8 @@ class PlatformTtsWeb implements PlatformTts {
     }
 
     final isTamil = _isTamil(text);
-    final targetLang = preferredLocale?.toLowerCase() ?? (isTamil ? 'ta-in' : 'en-in');
+    final targetLang =
+        preferredLocale?.toLowerCase() ?? (isTamil ? 'ta-in' : 'en-in');
 
     // 1. Exact or prefix match for target locale (e.g. en-in, ta-in)
     for (final v in _voices) {
@@ -117,16 +120,20 @@ class PlatformTtsWeb implements PlatformTts {
       return;
     }
 
-    // Cancel any ongoing or stuck speech before starting new utterance
+    // A Web Speech call is asynchronous.  Keep this Future pending until its
+    // callback fires so controller code cannot start another speech path while
+    // this utterance is still playing.
+    final utteranceId = ++_utteranceId;
     _keepAliveTimer?.cancel();
     _keepAliveTimer = null;
-
-    try {
-      web.window.speechSynthesis.cancel();
-      if (web.window.speechSynthesis.paused) {
-        web.window.speechSynthesis.resume();
-      }
-    } catch (_) {}
+    final previousCompleter = _activeCompleter;
+    _activeCompleter = null;
+    previousCompleter?.complete();
+    if (_activeUtterance != null) {
+      try {
+        web.window.speechSynthesis.cancel();
+      } catch (_) {}
+    }
 
     // In Chrome, each utterance MUST be a fresh SpeechSynthesisUtterance instance
     final utterance = web.SpeechSynthesisUtterance(clean);
@@ -144,6 +151,8 @@ class PlatformTtsWeb implements PlatformTts {
 
     // Retain strong reference to prevent Chrome garbage-collecting the utterance mid-speech
     _activeUtterance = utterance;
+    final completer = Completer<void>();
+    _activeCompleter = completer;
 
     utterance.onstart = ((web.Event _) {
       debugPrint('[WebTTS] Utterance playback started (${clean.length} chars)');
@@ -151,22 +160,30 @@ class PlatformTtsWeb implements PlatformTts {
     }).toJS;
 
     utterance.onend = ((web.Event _) {
+      if (utteranceId != _utteranceId) return;
       debugPrint('[WebTTS] Utterance playback completed');
       _keepAliveTimer?.cancel();
       _keepAliveTimer = null;
       if (_activeUtterance == utterance) {
         _activeUtterance = null;
       }
+      if (!completer.isCompleted) {
+        completer.complete();
+      }
       _onComplete?.call();
     }).toJS;
 
     utterance.onerror = ((web.SpeechSynthesisErrorEvent e) {
+      if (utteranceId != _utteranceId) return;
       final errorType = e.error;
       debugPrint('[WebTTS] Utterance error: $errorType');
       _keepAliveTimer?.cancel();
       _keepAliveTimer = null;
       if (_activeUtterance == utterance) {
         _activeUtterance = null;
+      }
+      if (!completer.isCompleted) {
+        completer.complete();
       }
       if (errorType == 'canceled' || errorType == 'interrupted') {
         _onCancel?.call();
@@ -178,7 +195,9 @@ class PlatformTtsWeb implements PlatformTts {
     // Workaround for Chrome bug where long speech (>15s) pauses silently
     _keepAliveTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
       try {
-        if (web.window.speechSynthesis.speaking) {
+        if (utteranceId != _utteranceId) {
+          timer.cancel();
+        } else if (web.window.speechSynthesis.speaking) {
           web.window.speechSynthesis.pause();
           web.window.speechSynthesis.resume();
         } else {
@@ -190,7 +209,9 @@ class PlatformTtsWeb implements PlatformTts {
     });
 
     try {
-      debugPrint('[WebTTS] Invoking window.speechSynthesis.speak() (voice: ${voice?.name ?? "default"}, lang: ${utterance.lang})');
+      debugPrint(
+        '[WebTTS] Invoking window.speechSynthesis.speak() (voice: ${voice?.name ?? "default"}, lang: ${utterance.lang})',
+      );
       web.window.speechSynthesis.speak(utterance);
       if (web.window.speechSynthesis.paused) {
         web.window.speechSynthesis.resume();
@@ -200,15 +221,25 @@ class PlatformTtsWeb implements PlatformTts {
       _keepAliveTimer?.cancel();
       _keepAliveTimer = null;
       _activeUtterance = null;
+      if (!completer.isCompleted) {
+        completer.complete();
+      }
       _onError?.call(e.toString());
     }
+    await completer.future;
   }
 
   @override
   Future<void> stop() async {
+    ++_utteranceId;
     _keepAliveTimer?.cancel();
     _keepAliveTimer = null;
     _activeUtterance = null;
+    final completer = _activeCompleter;
+    _activeCompleter = null;
+    if (completer != null && !completer.isCompleted) {
+      completer.complete();
+    }
     try {
       web.window.speechSynthesis.cancel();
     } catch (_) {}

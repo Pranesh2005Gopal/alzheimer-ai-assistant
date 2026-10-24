@@ -172,10 +172,17 @@ class AssistantController extends ChangeNotifier {
     if (_heardReminderKey != key) {
       _heardReminderKey = key;
       addLine(fromYou: false, text: message);
-      if (active.needsSpeech && active.audioBytes != null && !listening && !ttsMuted) {
+      if (active.needsSpeech && !listening && !ttsMuted) {
         statusText = message;
         _emit();
-        await speakBytes(active.audioBytes!, text: message);
+        // A missing server WAV means Coqui TTS was unavailable.  Speak the
+        // same reminder through the existing platform TTS instead of treating
+        // a notification/tone as a spoken reminder.
+        if (active.audioBytes != null && active.audioBytes!.length >= 45) {
+          await speakBytes(active.audioBytes!, text: message);
+        } else {
+          await speakText(message);
+        }
       }
     }
   }
