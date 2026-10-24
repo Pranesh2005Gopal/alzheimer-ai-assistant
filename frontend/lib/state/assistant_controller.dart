@@ -284,7 +284,12 @@ class AssistantController extends ChangeNotifier {
     bool automatic = false,
     String source = 'unknown',
   }) async {
-    if (automatic && !_automaticallyPlayedLineIds.add(line.id)) {
+    final accepted = !automatic || _automaticallyPlayedLineIds.add(line.id);
+    debugPrint(
+      '[TTS] assistant line=${line.id} automatic=$automatic accepted=$accepted '
+      'phase=$voicePhase active=${currentlySpeakingLineId != null}',
+    );
+    if (!accepted) {
       debugPrint(
         '[TTS] Ignoring duplicate automatic playback source=$source line=${line.id}',
       );
@@ -294,11 +299,12 @@ class AssistantController extends ChangeNotifier {
       '[TTS] Starting ${automatic ? 'automatic' : 'explicit'} playback '
       'source=$source line=${line.id}',
     );
-    if (line.audioBytes != null && line.audioBytes!.length >= 45) {
-      await speakBytes(line.audioBytes!, text: line.text, lineId: line.id);
-    } else {
-      await speakText(line.text, lineId: line.id);
-    }
+    // Assistant messages use one browser/platform TTS lifecycle.  Choosing
+    // server WAV bytes here left automatic replies on a separate HTML-audio
+    // path which can stop accepting later autoplay attempts in Chrome.  The
+    // platform TTS implementation already owns cancellation, completion and
+    // the browser's speech-synthesis voice preference for every response.
+    await speakText(line.text, lineId: line.id);
   }
 
   Future<void> playBlockedAudio() async {
@@ -484,7 +490,10 @@ class AssistantController extends ChangeNotifier {
     if (clean.isEmpty) return;
 
     if (voicePhase == VoicePhase.speaking || currentlySpeakingText != null) {
-      debugPrint('[TTS] Stopping active speech before starting new speech');
+      debugPrint(
+        '[TTS] line=$lineId stopping active line=$currentlySpeakingLineId '
+        'before replacement',
+      );
       await stopSpeaking();
       await Future<void>.delayed(const Duration(milliseconds: 100));
     }

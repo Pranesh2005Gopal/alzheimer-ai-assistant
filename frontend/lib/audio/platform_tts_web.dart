@@ -20,6 +20,23 @@ class PlatformTtsWeb implements PlatformTts {
   List<web.SpeechSynthesisVoice> _voices = [];
   int _utteranceId = 0;
 
+  Future<void> _settleBrowserQueue() async {
+    final synthesis = web.window.speechSynthesis;
+    if (_activeUtterance != null || synthesis.speaking || synthesis.pending || synthesis.paused) {
+      debugPrint(
+        '[WebTTS] recovering queue speaking=${synthesis.speaking} '
+        'pending=${synthesis.pending} paused=${synthesis.paused}',
+      );
+      try {
+        synthesis.cancel();
+        // Chrome applies cancel asynchronously. Starting the next utterance in
+        // the same task can leave it pending without ever producing onstart.
+        await Future<void>.delayed(const Duration(milliseconds: 60));
+        if (synthesis.paused) synthesis.resume();
+      } catch (_) {}
+    }
+  }
+
   @override
   Future<void> init({
     required void Function(int playbackId) onStart,
@@ -142,11 +159,7 @@ class PlatformTtsWeb implements PlatformTts {
     final previousCompleter = _activeCompleter;
     _activeCompleter = null;
     previousCompleter?.complete();
-    if (_activeUtterance != null) {
-      try {
-        web.window.speechSynthesis.cancel();
-      } catch (_) {}
-    }
+    await _settleBrowserQueue();
 
     // In Chrome, each utterance MUST be a fresh SpeechSynthesisUtterance instance
     final utterance = web.SpeechSynthesisUtterance(clean);
@@ -181,6 +194,7 @@ class PlatformTtsWeb implements PlatformTts {
       if (_activeUtterance == utterance) {
         _activeUtterance = null;
       }
+      if (_activeCompleter == completer) _activeCompleter = null;
       if (!completer.isCompleted) {
         completer.complete();
       }
@@ -196,6 +210,7 @@ class PlatformTtsWeb implements PlatformTts {
       if (_activeUtterance == utterance) {
         _activeUtterance = null;
       }
+      if (_activeCompleter == completer) _activeCompleter = null;
       if (!completer.isCompleted) {
         completer.complete();
       }
@@ -224,8 +239,8 @@ class PlatformTtsWeb implements PlatformTts {
 
     try {
       debugPrint(
-        '[WebTTS] Invoking window.speechSynthesis.speak() id=$utteranceId '
-        '(voice: ${voice?.name ?? "default"}, lang: ${utterance.lang})',
+        '[WebTTS] invoking speak id=$utteranceId length=${clean.length} '
+        'voice=${voice?.name ?? "default"} lang=${utterance.lang}',
       );
       web.window.speechSynthesis.speak(utterance);
       _logSynthesisState('after speak()', utteranceId);

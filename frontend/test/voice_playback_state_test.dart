@@ -72,19 +72,19 @@ void main() {
   }
 
   test(
-    'identical replies are played as distinct message turns and return idle',
+    'first and identical subsequent automatic replies each play once',
     () async {
       final tts = _FakeTts();
       final controller = await controllerFor(tts);
       final first = controller.addLine(fromYou: false, text: 'Same reply');
-      final firstPlay = controller.speakText(first.text, lineId: first.id);
+      final firstPlay = controller.speakAssistantLine(first, automatic: true);
       expect(controller.voicePhase, VoicePhase.speaking);
       expect(controller.currentlySpeakingLineId, first.id);
       tts.finish();
       await firstPlay;
 
       final second = controller.addLine(fromYou: false, text: 'Same reply');
-      final secondPlay = controller.speakText(second.text, lineId: second.id);
+      final secondPlay = controller.speakAssistantLine(second, automatic: true);
       expect(tts.speakCount, 2);
       expect(controller.currentlySpeakingLineId, second.id);
       tts.finish();
@@ -93,6 +93,19 @@ void main() {
       expect(controller.currentlySpeakingLineId, isNull);
     },
   );
+
+  test('several completed automatic replies remain speakable', () async {
+    final tts = _FakeTts();
+    final controller = await controllerFor(tts);
+    for (var index = 0; index < 3; index++) {
+      final line = controller.addLine(fromYou: false, text: 'Reply $index');
+      final playback = controller.speakAssistantLine(line, automatic: true);
+      tts.finish();
+      await playback;
+    }
+    expect(tts.speakCount, 3);
+    expect(controller.voicePhase, VoicePhase.idle);
+  });
 
   test(
     'controller notifications cannot replay an automatic response',
@@ -109,6 +122,22 @@ void main() {
       expect(controller.voicePhase, VoicePhase.idle);
     },
   );
+
+  test('automatic replies use browser TTS even when backend audio is present',
+      () async {
+    final tts = _FakeTts();
+    final controller = await controllerFor(tts);
+    final line = controller.addLine(
+      fromYou: false,
+      text: 'Reply with server audio',
+      audioBytes: List<int>.filled(45, 1),
+    );
+    final playback = controller.speakAssistantLine(line, automatic: true);
+    expect(tts.speakCount, 1);
+    tts.finish();
+    await playback;
+    expect(controller.voicePhase, VoicePhase.idle);
+  });
 
   test(
     'stop and speech errors clear the speaking state for later playback',
@@ -130,7 +159,7 @@ void main() {
   );
 
   test(
-    'replay and a newer response keep the active message state correct',
+    'replay and a newer automatic response keep the active message state correct',
     () async {
       final tts = _FakeTts();
       final controller = await controllerFor(tts);
@@ -142,7 +171,7 @@ void main() {
       expect(controller.currentlySpeakingLineId, first.id);
 
       final second = controller.addLine(fromYou: false, text: 'New reply');
-      final secondPlay = controller.speakText(second.text, lineId: second.id);
+      final secondPlay = controller.speakAssistantLine(second, automatic: true);
       await firstPlay;
       await Future<void>.delayed(const Duration(milliseconds: 110));
       expect(controller.currentlySpeakingLineId, second.id);

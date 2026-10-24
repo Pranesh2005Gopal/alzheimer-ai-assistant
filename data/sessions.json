@@ -123,6 +123,18 @@
     "user_id": "b65f5da1a090404e",
     "role": "patient",
     "created_at": "2026-10-24T12:08:46+00:00",
-    "last_seen": 1792843911.8099284
+    "last_seen": 1792844436.811658
+  },
+  "7oKOeuMUts6YHrS5SvRvuLBMdygLI0PAcb8Wf9WIV1c": {
+    "user_id": "b65f5da1a090404e",
+    "role": "patient",
+    "created_at": "2026-10-24T12:27:02+00:00",
+    "last_seen": 1792845101.1457474
+  },
+  "ZwdGcip6kZg3zbDWtEGwDQx1UUes00wxXrLIGbzuzHo": {
+    "user_id": "b65f5da1a090404e",
+    "role": "patient",
+    "created_at": "2026-10-24T12:59:53+00:00",
+    "last_seen": 1792846972.3605921
   }
 }
