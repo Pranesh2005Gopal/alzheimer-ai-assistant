@@ -91,12 +91,19 @@ class PatientContextService:
     def _profile(self) -> dict:
         # The id originates in PatientAccess, never from a request body.
         user = get_user_by_id(self.patient_id)
-        return dict(user.get("profile") or {}) if user else {}
+        if not user:
+            return {}
+        profile = dict(user.get("profile") or {})
+        # A newly created profile has empty defaults, which may still use
+        # legitimate legacy facts. A field cleared through profile editing is
+        # different: it must not be filled from stale seed preferences.
+        profile["_explicitly_cleared_fields"] = set(user.get("cleared_profile_fields") or [])
+        return profile
 
     def _name(self, profile: dict) -> ContextAnswer:
         full = str(profile.get("full_name") or "").strip()
         preferred = str(profile.get("preferred_name") or "").strip()
-        if not preferred:
+        if not preferred and not self._is_explicitly_cleared(profile, "preferred_name"):
             preferred = self._preference_value("preferred_name") or ""
         if full and preferred and preferred.lower() != full.lower():
             return ContextAnswer(f"Your name is {full}, and you prefer to be called {preferred}.", "name")
@@ -108,7 +115,7 @@ class PatientContextService:
 
     def _birthday(self, profile: dict) -> ContextAnswer:
         dob = str(profile.get("date_of_birth") or "").strip()
-        if not dob:
+        if not dob and not self._is_explicitly_cleared(profile, "date_of_birth"):
             dob = self._preference_value("date_of_birth") or ""
         if not dob:
             return self._missing("birthday")
@@ -122,6 +129,8 @@ class PatientContextService:
             return ContextAnswer(f"Your saved date of birth is {dob}.", "birthday")
 
     def _hobbies(self, profile: dict) -> ContextAnswer:
+        if self._is_explicitly_cleared(profile, "hobbies"):
+            return self._missing("hobbies or interests")
         hobbies = self._strings(profile.get("hobbies"))
         if not hobbies:
             hobbies = self._preference_values("hobby", "hobbies", "interest", "interests", "activity")
@@ -133,6 +142,8 @@ class PatientContextService:
         return ContextAnswer(f"You enjoy {self._join(values)}.", "hobbies")
 
     def _routine(self, profile: dict) -> ContextAnswer:
+        if self._is_explicitly_cleared(profile, "daily_routine"):
+            return self._missing("daily routine")
         routine = self._strings(profile.get("daily_routine"))
         if routine:
             return ContextAnswer(f"Your saved daily routine is {self._join(routine)}.", "routine")
@@ -154,6 +165,8 @@ class PatientContextService:
         return ContextAnswer(f"Your saved family information includes {self._join(entries)}.", "family")
 
     def _memories(self, profile: dict) -> ContextAnswer:
+        if self._is_explicitly_cleared(profile, "personal_memories"):
+            return self._missing("personal memories")
         memories = self._strings(profile.get("personal_memories"))
         memories += [p.value for p in self.repos.memory.list_preferences() if p.key.lower() in {"note", "memory", "biography"}]
         if not memories:
@@ -191,6 +204,10 @@ class PatientContextService:
     @staticmethod
     def _strings(value: object) -> list[str]:
         return [str(item).strip() for item in value] if isinstance(value, list) else []
+
+    @staticmethod
+    def _is_explicitly_cleared(profile: dict, field: str) -> bool:
+        return field in profile.get("_explicitly_cleared_fields", set())
 
     @staticmethod
     def _unique(values: list[str]) -> list[str]:

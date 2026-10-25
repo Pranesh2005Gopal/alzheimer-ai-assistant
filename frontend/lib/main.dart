@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_web_plugins/flutter_web_plugins.dart';
 
 import 'api/auth_api.dart';
 import 'screens/app_shell.dart';
@@ -9,6 +8,7 @@ import 'settings/app_settings.dart';
 import 'state/assistant_controller.dart';
 import 'state/auth_controller.dart';
 import 'theme/app_theme.dart';
+import 'web/url_strategy.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();

@@ -160,5 +160,17 @@
     "role": "patient",
     "created_at": "2026-10-25T12:16:13+00:00",
     "last_seen": 1792931322.4541852
+  },
+  "5yQZx8WYwGNf0th8nr0g_2JyjYbHPsK6nKoonVy_8AY": {
+    "user_id": "b65f5da1a090404e",
+    "role": "patient",
+    "created_at": "2026-10-25T14:43:47+00:00",
+    "last_seen": 1792939478.9230666
+  },
+  "qXNgl6dM-oii3N3zEsIpqZaiQoPxEFawRFf_U7Nt3uQ": {
+    "user_id": "b65f5da1a090404e",
+    "role": "patient",
+    "created_at": "2026-10-25T15:13:59+00:00",
+    "last_seen": 1792941311.7295587
   }
 }

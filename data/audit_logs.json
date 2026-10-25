@@ -30,5 +30,13 @@
     "target": "7c26678274394b9e",
     "details": "Permissions: ['full_name', 'hobbies']",
     "timestamp": "2026-10-14T13:44:59+00:00"
+  },
+  {
+    "id": "0f87075bb69e",
+    "user_id": "199b3128795e4ec1",
+    "action": "view_profile",
+    "target": "95d21660947a462c",
+    "details": "Permissions: ['full_name', 'hobbies']",
+    "timestamp": "2026-10-25T12:53:24+00:00"
   }
 ]

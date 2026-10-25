@@ -123,6 +123,10 @@ def create_user(
             },
             "private": {},           # encrypted at rest
             "caregiver_permissions": {},
+            # An empty default field means "not saved yet".  This list records
+            # fields deliberately cleared later so legacy seed facts are not
+            # presented as the patient's current profile data.
+            "cleared_profile_fields": [],
             "created_at": _now_iso(),
         }
         users.append(user)
@@ -160,9 +164,15 @@ def update_profile(user_id: str, profile_update: dict) -> dict:
                     "language", "voice_preference", "hobbies", "daily_routine",
                     "important_dates", "personal_memories",
                 }
+                cleared = set(u.get("cleared_profile_fields", []))
                 for k, v in profile_update.items():
                     if k in allowed:
                         u["profile"][k] = v
+                        if _is_empty_profile_value(v):
+                            cleared.add(k)
+                        else:
+                            cleared.discard(k)
+                u["cleared_profile_fields"] = sorted(cleared)
                 _save_users(users)
                 return _safe_user(u)
         raise ValueError("user_not_found")
@@ -392,10 +402,16 @@ def _safe_user(u: dict) -> dict:
         "email": u["email"],
         "role": u["role"],
         "profile": u.get("profile", {}),
+        "cleared_profile_fields": u.get("cleared_profile_fields", []),
         "caregiver_permissions": u.get("caregiver_permissions", {}),
         "created_at": u.get("created_at", ""),
         "has_pin": bool(u.get("pin_hash")),
     }
+
+
+def _is_empty_profile_value(value: object) -> bool:
+    """Whether a supported profile edit intentionally clears a field."""
+    return value is None or value == "" or value == [] or value == {}
 
 
 def _encrypt_private(data: dict, user_id: str) -> dict:
