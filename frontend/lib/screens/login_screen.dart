@@ -7,7 +7,13 @@ import '../state/auth_controller.dart';
 import '../theme/app_colors.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  const LoginScreen({super.key, this.startInRegister = false, this.onBack});
+
+  /// Opens the existing registration form instead of sign-in.
+  final bool startInRegister;
+
+  /// Optional back action used by the public landing page.
+  final VoidCallback? onBack;
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -19,7 +25,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordCtrl = TextEditingController();
   final _nameCtrl = TextEditingController();
 
-  bool _isRegister = false;
+  late bool _isRegister = widget.startInRegister;
   bool _obscure = true;
   String _role = 'patient';
 
@@ -61,6 +67,16 @@ class _LoginScreenState extends State<LoginScreen> {
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
+      appBar: widget.onBack == null
+          ? null
+          : AppBar(
+              backgroundColor: Colors.transparent,
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back),
+                tooltip: 'Back',
+                onPressed: widget.onBack,
+              ),
+            ),
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),

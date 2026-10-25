@@ -135,6 +135,30 @@
     "user_id": "b65f5da1a090404e",
     "role": "patient",
     "created_at": "2026-10-24T12:59:53+00:00",
-    "last_seen": 1792846972.3605921
+    "last_seen": 1792847407.3450034
+  },
+  "2AzRpYNg6nHanOdS6hlTocI5Sl5JP-y4kNOlsd9CANw": {
+    "user_id": "b65f5da1a090404e",
+    "role": "patient",
+    "created_at": "2026-10-25T05:38:53+00:00",
+    "last_seen": 1792920569.0216002
+  },
+  "Mw8NWiHHRP1g-P2fvXjFRw6jyJzOT_lOGR7v88LapVk": {
+    "user_id": "b65f5da1a090404e",
+    "role": "patient",
+    "created_at": "2026-10-25T10:47:45+00:00",
+    "last_seen": 1792925415.6470306
+  },
+  "xCDxSjL2nW6eC7GPqx3Jr3A1Z3sppt_l9sbg9AmDCW0": {
+    "user_id": "b65f5da1a090404e",
+    "role": "patient",
+    "created_at": "2026-10-25T10:57:06+00:00",
+    "last_seen": 1792928179.27019
+  },
+  "O-indHT65Dc4F7Rxp55BPMzbvj7t5ERNoGlTWxZDkZ4": {
+    "user_id": "b65f5da1a090404e",
+    "role": "patient",
+    "created_at": "2026-10-25T12:16:13+00:00",
+    "last_seen": 1792931040.2444723
   }
 }

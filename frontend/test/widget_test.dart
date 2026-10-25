@@ -25,6 +25,14 @@ void main() {
     await tester.pump(Duration.zero);
 
     expect(find.byType(MaterialApp), findsOneWidget);
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is MaterialApp &&
+            widget.title == 'AI Memory Care — Personalized Voice Assistant',
+      ),
+      findsOneWidget,
+    );
 
     // Do NOT call controller.dispose() here — the widget's State.dispose() handles it.
   });
