@@ -22,6 +22,9 @@ frontend/.flutter-plugins-dependencies
 frontend/pubspec.lock
 
 .env
+.env.*
+!.env.example
+!.env.production.example
 .DS_Store
 *.log
 .idea/

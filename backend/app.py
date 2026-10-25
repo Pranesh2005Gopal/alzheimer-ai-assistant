@@ -6,6 +6,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.api.router import api_router
 from backend.container import get_container
+from utils.config import get_settings
+
+settings = get_settings()
+settings.validate_production()
 
 app = FastAPI(
     title="Alzheimer Voice Assistant API",
@@ -15,7 +19,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_origin_list(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -134,8 +134,16 @@ def link_legacy_patient(factory, legacy_patient_id: str, patient_user_id: str) -
     return {"status": "linked", "patient_id": patient_user_id}
 
 class PostgresRepositoryBundle:
-    def __init__(self,url,patient_id,seed_path):
-        self.engine=create_engine(url,pool_pre_ping=True); self.factory=sessionmaker(self.engine,expire_on_commit=False)
+    def __init__(self, url, patient_id, seed_path, *, pool_size=5, max_overflow=5, pool_timeout=30, pool_recycle=1800):
+        engine_options = {"pool_pre_ping": True}
+        if not url.startswith("sqlite"):
+            engine_options.update(
+                pool_size=pool_size,
+                max_overflow=max_overflow,
+                pool_timeout=pool_timeout,
+                pool_recycle=pool_recycle,
+            )
+        self.engine=create_engine(url, **engine_options); self.factory=sessionmaker(self.engine,expire_on_commit=False)
         # Production schema changes are owned by Alembic.  SQLite is retained
         # solely for isolated repository tests.
         if url.startswith("sqlite"):

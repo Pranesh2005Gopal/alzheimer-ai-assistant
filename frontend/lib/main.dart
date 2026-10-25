@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_web_plugins/flutter_web_plugins.dart';
 
 import 'api/auth_api.dart';
 import 'screens/app_shell.dart';
@@ -11,6 +12,7 @@ import 'theme/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  usePathUrlStrategy();
   final settings = await AppSettings.load();
   final authApi = AuthApi(baseUrl: settings.apiBase);
   final controller = AssistantController(
@@ -76,7 +78,10 @@ class _PatientAssistantAppState extends State<PatientAssistantApp> {
                   theme: AppTheme.light(),
                   darkTheme: AppTheme.dark(),
                   themeMode: widget.controller.themeMode,
-                  home: _RootNavigator(authController: widget.authController),
+                  home: _RootNavigator(
+                    authController: widget.authController,
+                    initialRoute: _AppRoute.fromPath(Uri.base.path),
+                  ),
                 ),
               );
             },
@@ -90,9 +95,13 @@ class _PatientAssistantAppState extends State<PatientAssistantApp> {
 /// Routes to the public landing page, existing login/register screens,
 /// or the authenticated app shell based on auth state.
 class _RootNavigator extends StatefulWidget {
-  const _RootNavigator({required this.authController});
+  const _RootNavigator({
+    required this.authController,
+    required this.initialRoute,
+  });
 
   final AuthController authController;
+  final _AppRoute initialRoute;
 
   @override
   State<_RootNavigator> createState() => _RootNavigatorState();
@@ -100,14 +109,60 @@ class _RootNavigator extends StatefulWidget {
 
 enum _UnauthView { landing, login, register }
 
+/// The public web paths supported by Firebase Hosting's SPA rewrite.
+///
+/// These paths deliberately map only to screens and AppShell destinations
+/// that already exist in this application. Unknown paths continue to show the
+/// landing page instead of exposing a new route surface.
+class _AppRoute {
+  const _AppRoute._(this.unauthView, this.navIndex);
+
+  const _AppRoute.landing() : this._(_UnauthView.landing, null);
+  const _AppRoute.login() : this._(_UnauthView.login, null);
+  const _AppRoute.register() : this._(_UnauthView.register, null);
+  const _AppRoute.dashboard() : this._(_UnauthView.landing, 0);
+  const _AppRoute.voice() : this._(_UnauthView.landing, 1);
+  const _AppRoute.face() : this._(_UnauthView.landing, 4);
+
+  final _UnauthView unauthView;
+  final int? navIndex;
+
+  static _AppRoute fromPath(String path) {
+    switch (path) {
+      case '/login':
+        return const _AppRoute.login();
+      case '/register':
+        return const _AppRoute.register();
+      case '/dashboard':
+        return const _AppRoute.dashboard();
+      case '/voice':
+        return const _AppRoute.voice();
+      case '/face':
+        return const _AppRoute.face();
+      case '/':
+      default:
+        return const _AppRoute.landing();
+    }
+  }
+}
+
 class _RootNavigatorState extends State<_RootNavigator> {
-  _UnauthView _unauthView = _UnauthView.landing;
+  late _UnauthView _unauthView;
   AuthState? _lastAuthState;
 
   @override
   void initState() {
     super.initState();
+    _unauthView = widget.initialRoute.unauthView;
     widget.authController.addListener(_onAuthChanged);
+    final initialNavIndex = widget.initialRoute.navIndex;
+    if (initialNavIndex != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          AssistantScope.of(context).selectNav(initialNavIndex);
+        }
+      });
+    }
   }
 
   @override

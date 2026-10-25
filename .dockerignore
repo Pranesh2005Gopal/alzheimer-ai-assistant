@@ -1,0 +1,17 @@
+.git/
+.venv/
+venv/
+__pycache__/
+.pytest_cache/
+.env
+.env.*
+!.env.example
+data/*.json
+data/backups/
+data/chroma/
+frontend/.dart_tool/
+frontend/build/
+frontend/.idea/
+frontend/.flutter-plugins
+frontend/.flutter-plugins-dependencies
+*.log

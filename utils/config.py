@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -11,6 +12,9 @@ class Settings(BaseSettings):
 
     api_host: str = "0.0.0.0"
     api_port: int = 8080
+    environment: str = "development"
+    cors_origins: str = ""
+    auth_encryption_key: str = Field(default="", validation_alias="AUTH_ENCRYPT_KEY")
 
     # Whisper speech-to-text
     whisper_model: str = "base"
@@ -42,11 +46,37 @@ class Settings(BaseSettings):
     conversation_history_limit: int = 50
     database_url: str = ""
     database_patient_id: str = "patient-1"
+    database_pool_size: int = 5
+    database_max_overflow: int = 5
+    database_pool_timeout: int = 30
+    database_pool_recycle: int = 1800
     care_admin_emails: str = ""
     intent_examples_path: Path = ROOT / "data" / "intent_examples.json"
 
     # Isolation Forest (Phase 7) — never used for medical diagnosis
     anomaly_contamination: float = 0.1
+
+    @property
+    def is_production(self) -> bool:
+        return self.environment.strip().lower() in {"production", "prod"}
+
+    def cors_origin_list(self) -> list[str]:
+        origins = [origin.strip().rstrip("/") for origin in self.cors_origins.split(",") if origin.strip()]
+        if origins:
+            return origins
+        # Keep local development behavior unchanged. Production is validated
+        # before the application starts.
+        return ["*"]
+
+    def validate_production(self) -> None:
+        if not self.is_production:
+            return
+        if not self.database_url:
+            raise RuntimeError("DATABASE_URL is required when ENVIRONMENT=production.")
+        if not self.cors_origins.strip():
+            raise RuntimeError("CORS_ORIGINS is required when ENVIRONMENT=production.")
+        if not self.auth_encryption_key.strip() or self.auth_encryption_key == "alzheimer-dev-key-change-in-prod":
+            raise RuntimeError("AUTH_ENCRYPT_KEY must be set to a non-default value when ENVIRONMENT=production.")
 
 
 def get_settings() -> Settings:

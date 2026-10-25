@@ -26,7 +26,15 @@ class AppContainer:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         if settings.database_url:
-            self.repos = PostgresRepositoryBundle(settings.database_url, settings.database_patient_id, settings.seed_path)
+            self.repos = PostgresRepositoryBundle(
+                settings.database_url,
+                settings.database_patient_id,
+                settings.seed_path,
+                pool_size=settings.database_pool_size,
+                max_overflow=settings.database_max_overflow,
+                pool_timeout=settings.database_pool_timeout,
+                pool_recycle=settings.database_pool_recycle,
+            )
             self.history = PostgresConversationHistory(self.repos.factory, settings.database_patient_id, settings.conversation_history_limit)
         else:
             patient_id = settings.database_patient_id
