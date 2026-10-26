@@ -30,10 +30,44 @@ from backend.auth.store import (
     verify_user_pin,
 )
 from backend.container import get_container
-from repositories.postgres import link_legacy_patient
+from repositories.postgres import (
+    get_caregiver_profile, link_legacy_patient, list_caregiver_assignments,
+    sync_caregiver_assignment, upsert_caregiver_profile,
+)
 from utils.config import get_settings
 
 router = APIRouter(tags=["auth"])
+
+_PROFESSIONAL_PROFILE_FIELDS = {
+    "designation", "specialization", "organization", "qualifications",
+    "professional_phone", "professional_email",
+}
+
+
+def _postgres_factory():
+    """Return the configured care database factory, or None in file-backed dev."""
+    container = get_container()
+    return getattr(getattr(container, "repos", None), "factory", None) if container.settings.database_url else None
+
+
+def _caregiver_professional_fields(caregiver_id: str) -> dict:
+    factory = _postgres_factory()
+    return get_caregiver_profile(factory, caregiver_id) if factory else {}
+
+
+def _save_caregiver_professional_fields(caregiver_id: str, fields: dict) -> dict:
+    factory = _postgres_factory()
+    # File-backed development retains the same values in the existing profile
+    # store; production writes the durable PostgreSQL caregiver profile.
+    return upsert_caregiver_profile(factory, caregiver_id, fields) if factory else fields
+
+
+def _public_user_with_profile(user: dict) -> dict:
+    result = dict(user)
+    result["profile"] = dict(user.get("profile", {}))
+    if user.get("role") == "caregiver":
+        result["profile"].update(_caregiver_professional_fields(user["id"]))
+    return result
 
 # ---------------------------------------------------------------------------
 # Rate-limiting state (in-memory, per IP)
@@ -99,6 +133,12 @@ class ProfileUpdateRequest(BaseModel):
     daily_routine: Optional[list[str]] = None
     important_dates: Optional[list[Any]] = None
     personal_memories: Optional[list[Any]] = None
+    designation: Optional[str] = Field(default=None, max_length=200)
+    specialization: Optional[str] = Field(default=None, max_length=300)
+    organization: Optional[str] = Field(default=None, max_length=300)
+    qualifications: Optional[str] = None
+    professional_phone: Optional[str] = Field(default=None, max_length=80)
+    professional_email: Optional[str] = Field(default=None, max_length=320)
 
 
 class PrivateUpdateRequest(BaseModel):
@@ -140,7 +180,7 @@ def register(body: RegisterRequest, request: Request) -> dict:
             raise HTTPException(status_code=409, detail="Email already registered")
         raise HTTPException(status_code=400, detail=str(exc))
     token = create_session(user["id"], user["role"])
-    return {"user": user, "token": token}
+    return {"user": _public_user_with_profile(user), "token": token}
 
 
 @router.post("/auth/login")
@@ -150,7 +190,7 @@ def login(body: LoginRequest, request: Request) -> dict:
     if user is None:
         raise HTTPException(status_code=401, detail="Invalid email or password")
     token = create_session(user["id"], user["role"])
-    return {"user": user, "token": token}
+    return {"user": _public_user_with_profile(user), "token": token}
 
 
 @router.post("/auth/logout")
@@ -171,7 +211,7 @@ def logout2(request: Request) -> dict:
 
 @router.get("/auth/me")
 def me(user: dict = Depends(get_current_user)) -> dict:
-    return {"user": user}
+    return {"user": _public_user_with_profile(user)}
 
 
 @router.post("/auth/change-password")
@@ -216,14 +256,31 @@ def verify_pin_endpoint(body: VerifyPinRequest, request: Request, user: dict = D
 
 @router.get("/profile")
 def get_profile(user: dict = Depends(get_current_user)) -> dict:
-    return {"profile": user["profile"], "role": user["role"], "email": user["email"]}
+    profile = dict(user["profile"])
+    if user["role"] == "caregiver":
+        profile.update(_caregiver_professional_fields(user["id"]))
+    return {"profile": profile, "role": user["role"], "email": user["email"]}
 
 
 @router.patch("/profile")
 def update_user_profile(body: ProfileUpdateRequest, user: dict = Depends(get_current_user)) -> dict:
     changes = {k: v for k, v in body.model_dump().items() if v is not None}
-    updated = update_profile(user["id"], changes)
-    return {"profile": updated["profile"]}
+    professional = {k: changes.pop(k) for k in list(changes) if k in _PROFESSIONAL_PROFILE_FIELDS}
+    if professional and user["role"] != "caregiver":
+        raise HTTPException(status_code=403, detail="Professional profile fields are for caregiver accounts only")
+    # Keep local file-backed development usable while production persists the
+    # same caregiver fields in PostgreSQL.
+    profile_changes = dict(changes)
+    if professional and not _postgres_factory():
+        profile_changes.update(professional)
+    updated = update_profile(user["id"], profile_changes)
+    profile = dict(updated["profile"])
+    if user["role"] == "caregiver":
+        if professional:
+            profile.update(_save_caregiver_professional_fields(user["id"], professional))
+        else:
+            profile.update(_caregiver_professional_fields(user["id"]))
+    return {"profile": profile}
 
 
 # ---------------------------------------------------------------------------
@@ -293,6 +350,11 @@ def set_permissions(body: CaregiverPermissionRequest, user: dict = Depends(get_c
         set_caregiver_permission(user["id"], body.caregiver_id, body.permissions)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    factory = _postgres_factory()
+    if factory:
+        # The patient has just explicitly authorized this link.  Mirror it in
+        # PostgreSQL; do not synthesize links from unrelated account records.
+        sync_caregiver_assignment(factory, body.caregiver_id, user["id"], body.permissions)
     return {"ok": True}
 
 
@@ -301,6 +363,17 @@ def list_assigned_patients(user: dict = Depends(get_current_user)) -> dict:
     if user["role"] not in ("caregiver", "admin"):
         raise HTTPException(status_code=403, detail="Caregivers only")
     patients = get_assigned_patients(user["id"])
+    factory = _postgres_factory()
+    if factory:
+        # Backfill only pre-existing, verifiable patient-granted links. This
+        # preserves established assignments without inventing any new ones.
+        for patient in patients:
+            sync_caregiver_assignment(factory, user["id"], patient["id"], patient["permissions"])
+        # The database is the durable assignment index. Join it back to the
+        # authorization store so stale/removed permissions can never grant UI
+        # access, and never return private medical data in this listing.
+        permitted = {row["patient_id"]: row["permissions"] for row in list_caregiver_assignments(factory, user["id"])}
+        patients = [patient for patient in patients if permitted.get(patient["id"])]
     return {"patients": patients}
 
 

@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from backend.container import get_container
-from backend.auth.dependencies import PatientAccess, get_patient_access
+from backend.auth.dependencies import ChatAccess, PatientAccess, get_chat_access, get_patient_access
 from backend.auth.store import update_profile
 from models.domain import ReminderKind
 
@@ -265,8 +265,11 @@ def recent_activity(limit: int = 50, access: PatientAccess = Depends(get_patient
 
 
 @router.get("/conversation")
-def conversation_history(access: PatientAccess = Depends(get_patient_access)) -> dict:
-    container = get_container(access.patient_id)
+def conversation_history(access: ChatAccess = Depends(get_chat_access)) -> dict:
+    # Conversation history is private to the signed-in account. In particular,
+    # a caregiver's authorized patient selection must not reveal that patient's
+    # private chat transcript.
+    container = get_container(access.account_id, access.role)
     turns = container.history.recent(40)
     return {
         "turns": [

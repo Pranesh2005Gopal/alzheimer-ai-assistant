@@ -7,13 +7,13 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, File, UploadFile
 
 from backend.container import get_container
-from backend.auth.dependencies import PatientAccess, get_patient_access
+from backend.auth.dependencies import ChatAccess, get_chat_access
 
 router = APIRouter(tags=["voice"])
 
 
 @router.post("/voice/turn")
-async def voice_turn(audio: UploadFile = File(...), access: PatientAccess = Depends(get_patient_access)) -> dict:
+async def voice_turn(audio: UploadFile = File(...), access: ChatAccess = Depends(get_chat_access)) -> dict:
     """
     Full spoken turn:
     Whisper → spaCy + DistilBERT + Duckling → Dialogue Manager → Llama 3 → Coqui TTS
@@ -22,7 +22,7 @@ async def voice_turn(audio: UploadFile = File(...), access: PatientAccess = Depe
     if suffix.lower() not in {".wav", ".pcm", ".flac", ".ogg", ".mp3", ".m4a"}:
         suffix = ".wav"
     data = await audio.read()
-    container = get_container(access.patient_id)
+    container = get_container(access.account_id, access.role)
     if not data or len(data) < 100:
         result = container.pipeline.unheard_reply()
     else:

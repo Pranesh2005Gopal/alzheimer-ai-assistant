@@ -98,6 +98,17 @@ class TestUserStore:
         assert updated["profile"]["full_name"] == "Carol Jones"
         assert updated["profile"]["hobbies"] == ["reading", "gardening"]
 
+    def test_caregiver_professional_profile_is_persisted(self):
+        from backend.auth.store import create_user, update_profile
+        caregiver = create_user("nurse@example.com", "pass1234", role="caregiver")
+        updated = update_profile(caregiver["id"], {
+            "designation": "Registered Nurse",
+            "specialization": "Dementia care",
+            "organization": "Memory Clinic",
+        })
+        assert updated["profile"]["designation"] == "Registered Nurse"
+        assert updated["profile"]["organization"] == "Memory Clinic"
+
     def test_pin_set_and_verify(self):
         from backend.auth.store import create_user, set_pin, verify_user_pin
         user = create_user("dave@example.com", "pass1234")

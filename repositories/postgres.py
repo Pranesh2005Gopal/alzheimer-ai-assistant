@@ -10,7 +10,7 @@ import shutil
 from datetime import datetime
 from pathlib import Path
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Index, String, Text, create_engine, select, update
+from sqlalchemy import JSON, DateTime, ForeignKey, Index, String, Text, UniqueConstraint, create_engine, select, update
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
 from models.domain import ActivityEvent, Appointment, ImportantDate, PatientProfile, Person, Preference, Reminder, ReminderKind, ReminderStatus
@@ -24,6 +24,30 @@ class PatientRow(Base):
     preferred_name: Mapped[str] = mapped_column(String(200), default="")
     caregiver_name: Mapped[str] = mapped_column(String(200), default="caregiver")
     timezone: Mapped[str] = mapped_column(String(80), default="local")
+class CaregiverProfileRow(Base):
+    """Professional details for an authenticated caregiver.
+
+    Authentication identities remain owned by the auth store; this row uses
+    that stable identity as its key and intentionally contains no credentials.
+    """
+    __tablename__ = "caregiver_profiles"
+    caregiver_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    designation: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    specialization: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    organization: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    qualifications: Mapped[str | None] = mapped_column(Text, nullable=True)
+    professional_phone: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    professional_email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+class CaregiverPatientAssignmentRow(Base):
+    __tablename__ = "caregiver_patient_assignments"
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    caregiver_id: Mapped[str] = mapped_column(ForeignKey("caregiver_profiles.caregiver_id", ondelete="CASCADE"), index=True)
+    patient_id: Mapped[str] = mapped_column(ForeignKey("patients.id", ondelete="CASCADE"), index=True)
+    permissions: Mapped[list] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    __table_args__ = (UniqueConstraint("caregiver_id", "patient_id", name="uq_caregiver_patient_assignment"),)
+Index("ix_caregiver_assignment_patient_caregiver", CaregiverPatientAssignmentRow.patient_id, CaregiverPatientAssignmentRow.caregiver_id)
 class PersonRow(Base):
     __tablename__ = "people"; id: Mapped[str] = mapped_column(String(64), primary_key=True); patient_id: Mapped[str] = mapped_column(ForeignKey("patients.id"), index=True); name: Mapped[str] = mapped_column(String(200)); relationship: Mapped[str] = mapped_column(String(100)); notes: Mapped[str] = mapped_column(Text, default=""); face_embedding: Mapped[list] = mapped_column(JSON, default=list)
 class PreferenceRow(Base):
@@ -37,7 +61,11 @@ class AppointmentRow(Base):
 class ActivityRow(Base):
     __tablename__ = "activity_logs"; id: Mapped[str] = mapped_column(String(64), primary_key=True); patient_id: Mapped[str] = mapped_column(ForeignKey("patients.id"), index=True); timestamp_iso: Mapped[str] = mapped_column(String(64), index=True); kind: Mapped[str] = mapped_column(String(80)); summary: Mapped[str] = mapped_column(Text); metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
 class ConversationRow(Base):
-    __tablename__ = "conversation_messages"; id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True); patient_id: Mapped[str] = mapped_column(ForeignKey("patients.id"), index=True); conversation_id: Mapped[str] = mapped_column(String(64), default="default", index=True); timestamp_iso: Mapped[str] = mapped_column(String(64), index=True); role: Mapped[str] = mapped_column(String(20)); text: Mapped[str] = mapped_column(Text); intent: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    __tablename__ = "conversation_messages"; id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True); patient_id: Mapped[str | None] = mapped_column(ForeignKey("patients.id"), index=True, nullable=True); conversation_id: Mapped[str] = mapped_column(String(64), default="default", index=True); timestamp_iso: Mapped[str] = mapped_column(String(64), index=True); role: Mapped[str] = mapped_column(String(20)); text: Mapped[str] = mapped_column(Text); intent: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    # Added after the original patient-only schema. Legacy rows intentionally
+    # remain NULL and are not attributed to any account without evidence.
+    account_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    account_role: Mapped[str | None] = mapped_column(String(20), nullable=True)
 Index("ix_conversation_patient_time", ConversationRow.patient_id, ConversationRow.timestamp_iso)
 
 class _Repo:
@@ -103,13 +131,13 @@ class PatientRepo:
         with self.factory() as s:
             x=s.get(PatientRow,self.id); return PatientProfile(id=x.id,preferred_name=x.preferred_name,caregiver_name=x.caregiver_name,timezone=x.timezone)
 class PostgresConversationHistory:
-    def __init__(self,factory,patient_id,max_turns=50):self.factory,self.patient_id,self.max_turns=factory,patient_id,max_turns
+    def __init__(self,factory,account_id,max_turns=50,account_role="patient"):self.factory,self.account_id,self.max_turns,self.account_role=factory,account_id,max_turns,account_role
     def add(self,role,text,intent=None):
         with self.factory.begin() as s:
-            last=s.scalars(select(ConversationRow).where(ConversationRow.patient_id==self.patient_id).order_by(ConversationRow.id.desc()).limit(1)).first()
-            if not last or last.role!=role or last.text!=text:s.add(ConversationRow(patient_id=self.patient_id,timestamp_iso=datetime.now().isoformat(timespec='seconds'),role=role,text=text,intent=intent))
+            last=s.scalars(select(ConversationRow).where(ConversationRow.account_id==self.account_id).order_by(ConversationRow.id.desc()).limit(1)).first()
+            if not last or last.role!=role or last.text!=text:s.add(ConversationRow(patient_id=self.account_id if self.account_role == "patient" else None,timestamp_iso=datetime.now().isoformat(timespec='seconds'),role=role,text=text,intent=intent,account_id=self.account_id,account_role=self.account_role))
     def recent(self,limit=50):
-        with self.factory() as s: rows=list(s.scalars(select(ConversationRow).where(ConversationRow.patient_id==self.patient_id).order_by(ConversationRow.id.desc()).limit(min(limit,self.max_turns))))
+        with self.factory() as s: rows=list(s.scalars(select(ConversationRow).where(ConversationRow.account_id==self.account_id).order_by(ConversationRow.id.desc()).limit(min(limit,self.max_turns))))
         from models.domain import ConversationTurn; return [ConversationTurn(timestamp_iso=x.timestamp_iso,role=x.role,text=x.text,intent=x.intent) for x in reversed(rows)]
     def as_llm_messages(self): return [{"role":"user" if x.role=="patient" else "assistant","content":x.text} for x in self.recent(self.max_turns)]
 
@@ -132,6 +160,59 @@ def link_legacy_patient(factory, legacy_patient_id: str, patient_user_id: str) -
             s.execute(update(row).where(row.patient_id == legacy_patient_id).values(patient_id=patient_user_id))
         s.delete(legacy)
     return {"status": "linked", "patient_id": patient_user_id}
+
+
+def upsert_caregiver_profile(factory, caregiver_id: str, fields: dict) -> dict:
+    """Persist the caregiver-only professional fields without touching auth data."""
+    allowed = {"designation", "specialization", "organization", "qualifications", "professional_phone", "professional_email"}
+    values = {key: value for key, value in fields.items() if key in allowed}
+    with factory.begin() as s:
+        row = s.get(CaregiverProfileRow, caregiver_id)
+        if row is None:
+            row = CaregiverProfileRow(caregiver_id=caregiver_id)
+            s.add(row)
+        for key, value in values.items():
+            setattr(row, key, value)
+        s.flush()
+        return {key: getattr(row, key) or "" for key in allowed}
+
+
+def get_caregiver_profile(factory, caregiver_id: str) -> dict:
+    with factory() as s:
+        row = s.get(CaregiverProfileRow, caregiver_id)
+        if row is None:
+            return {}
+        return {key: getattr(row, key) or "" for key in ("designation", "specialization", "organization", "qualifications", "professional_phone", "professional_email")}
+
+
+def sync_caregiver_assignment(factory, caregiver_id: str, patient_id: str, permissions: list[str]) -> None:
+    """Mirror a verified auth assignment in PostgreSQL for durable care queries.
+
+    The caller has already validated the account roles.  We do not infer or
+    create assignments here, so no patient is ever implicitly exposed.
+    """
+    with factory.begin() as s:
+        if s.get(CaregiverProfileRow, caregiver_id) is None:
+            s.add(CaregiverProfileRow(caregiver_id=caregiver_id))
+        if s.get(PatientRow, patient_id) is None:
+            s.add(PatientRow(id=patient_id))
+        s.flush()
+        row = s.scalars(select(CaregiverPatientAssignmentRow).where(
+            CaregiverPatientAssignmentRow.caregiver_id == caregiver_id,
+            CaregiverPatientAssignmentRow.patient_id == patient_id,
+        )).first()
+        if row is None:
+            s.add(CaregiverPatientAssignmentRow(caregiver_id=caregiver_id, patient_id=patient_id, permissions=list(permissions)))
+        else:
+            row.permissions = list(permissions)
+
+
+def list_caregiver_assignments(factory, caregiver_id: str) -> list[dict]:
+    with factory() as s:
+        rows = s.scalars(select(CaregiverPatientAssignmentRow).where(
+            CaregiverPatientAssignmentRow.caregiver_id == caregiver_id
+        )).all()
+        return [{"patient_id": row.patient_id, "permissions": list(row.permissions or [])} for row in rows if row.permissions]
 
 class PostgresRepositoryBundle:
     def __init__(self, url, patient_id, seed_path, *, pool_size=5, max_overflow=5, pool_timeout=30, pool_recycle=1800):

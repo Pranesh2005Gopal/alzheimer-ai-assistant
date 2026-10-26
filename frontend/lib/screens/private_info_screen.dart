@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import '../api/auth_api.dart';
 import '../models/auth_models.dart';
 import '../state/auth_controller.dart';
+import '../state/assistant_controller.dart';
 import '../theme/app_colors.dart';
 
 class PrivateInfoScreen extends StatefulWidget {
@@ -17,6 +18,7 @@ class PrivateInfoScreen extends StatefulWidget {
 }
 
 class _PrivateInfoScreenState extends State<PrivateInfoScreen> {
+  bool get _isCaregiver => AuthScope.of(context).user?.isCaregiver == true;
   // PIN gate
   bool _unlocked = false;
   bool _verifying = false;
@@ -59,15 +61,24 @@ class _PrivateInfoScreenState extends State<PrivateInfoScreen> {
       setState(() => _pinError = 'Enter a valid 4–6 digit PIN');
       return;
     }
-    setState(() { _verifying = true; _pinError = null; });
+    setState(() {
+      _verifying = true;
+      _pinError = null;
+    });
     final grant = await auth.verifyPin(pin);
     if (!mounted) return;
     if (grant != null) {
       _grant = grant;
-      setState(() { _unlocked = true; _verifying = false; });
+      setState(() {
+        _unlocked = true;
+        _verifying = false;
+      });
       await _loadPrivateData();
     } else {
-      setState(() { _pinError = auth.error ?? 'Incorrect PIN'; _verifying = false; });
+      setState(() {
+        _pinError = auth.error ?? 'Incorrect PIN';
+        _verifying = false;
+      });
     }
   }
 
@@ -76,14 +87,22 @@ class _PrivateInfoScreenState extends State<PrivateInfoScreen> {
     setState(() => _loadingData = true);
     try {
       final auth = AuthScope.of(context);
-      final info = await auth.api.getPrivateInfo(grant: _grant!);
+      final selectedPatientId = AssistantScope.of(context).selectedPatientId;
+      final info = auth.user?.isCaregiver == true && selectedPatientId != null
+          ? await auth.api.getCaregiverPatientPrivate(
+              selectedPatientId,
+              grant: _grant!,
+            )
+          : await auth.api.getPrivateInfo(grant: _grant!);
       if (mounted) {
         setState(() {
           _privateInfo = info;
           _conditions = List<String>.from(info.medicalConditions);
           _allergies = List<String>.from(info.allergies);
           _medications = List<Map<String, dynamic>>.from(info.medications);
-          _emergencyContacts = List<Map<String, dynamic>>.from(info.emergencyContacts);
+          _emergencyContacts = List<Map<String, dynamic>>.from(
+            info.emergencyContacts,
+          );
           _addressCtrl.text = info.address;
           _doctorNameCtrl.text = (info.doctorDetails['name'] ?? '') as String;
           _doctorPhoneCtrl.text = (info.doctorDetails['phone'] ?? '') as String;
@@ -120,7 +139,10 @@ class _PrivateInfoScreenState extends State<PrivateInfoScreen> {
         grant: _grant!,
       );
       if (mounted) {
-        setState(() { _saving = false; _editing = false; });
+        setState(() {
+          _saving = false;
+          _editing = false;
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Private information saved.')),
         );
@@ -167,14 +189,16 @@ class _PrivateInfoScreenState extends State<PrivateInfoScreen> {
               )
             : null,
         actions: [
-          if (_unlocked && !_editing)
+          if (_unlocked && !user.isCaregiver && !_editing)
             IconButton(
               icon: const Icon(Icons.edit_outlined),
               onPressed: () => setState(() => _editing = true),
             ),
-          if (_unlocked && _editing) ...[
+          if (_unlocked && !user.isCaregiver && _editing) ...[
             TextButton(
-              onPressed: _saving ? null : () => setState(() => _editing = false),
+              onPressed: _saving
+                  ? null
+                  : () => setState(() => _editing = false),
               child: const Text('Cancel'),
             ),
             Padding(
@@ -182,8 +206,14 @@ class _PrivateInfoScreenState extends State<PrivateInfoScreen> {
               child: FilledButton(
                 onPressed: _saving ? null : _savePrivate,
                 child: _saving
-                    ? const SizedBox(height: 16, width: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    ? const SizedBox(
+                        height: 16,
+                        width: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
                     : const Text('Save'),
               ),
             ),
@@ -206,21 +236,37 @@ class _PrivateInfoScreenState extends State<PrivateInfoScreen> {
           constraints: const BoxConstraints(maxWidth: 360),
           child: Card(
             elevation: 4,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
             child: Padding(
               padding: const EdgeInsets.all(32),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.health_and_safety, size: 56, color: Colors.teal),
+                  const Icon(
+                    Icons.health_and_safety,
+                    size: 56,
+                    color: Colors.teal,
+                  ),
                   const SizedBox(height: 12),
-                  const Text('Private Medical Information',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18)),
+                  Text(
+                    _isCaregiver
+                        ? 'Authorized Patient Medical Information'
+                        : 'Private Medical Information',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
+                  ),
                   const SizedBox(height: 8),
-                  Text('Enter your PIN to access protected information.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                  Text(
+                    _isCaregiver
+                        ? 'Enter your PIN to access the selected patient’s authorized records.'
+                        : 'Enter your PIN to access protected information.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
                   const SizedBox(height: 24),
                   TextField(
                     controller: _pinCtrl,
@@ -243,8 +289,13 @@ class _PrivateInfoScreenState extends State<PrivateInfoScreen> {
                     child: FilledButton.icon(
                       icon: _verifying
                           ? const SizedBox(
-                              height: 16, width: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                              height: 16,
+                              width: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
                           : const Icon(Icons.lock_open),
                       label: Text(_verifying ? 'Verifying…' : 'Unlock'),
                       onPressed: _verifying ? null : _verifyPin,
@@ -254,10 +305,9 @@ class _PrivateInfoScreenState extends State<PrivateInfoScreen> {
                   Text(
                     'Locked after 5 failed attempts for 5 minutes.',
                     textAlign: TextAlign.center,
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
-                        ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                   ),
                 ],
               ),
@@ -318,14 +368,20 @@ class _PrivateInfoScreenState extends State<PrivateInfoScreen> {
                 TextFormField(
                   controller: _doctorNameCtrl,
                   enabled: _editing,
-                  decoration: const InputDecoration(labelText: "Doctor's Name", border: OutlineInputBorder()),
+                  decoration: const InputDecoration(
+                    labelText: "Doctor's Name",
+                    border: OutlineInputBorder(),
+                  ),
                 ),
                 const SizedBox(height: 10),
                 TextFormField(
                   controller: _doctorPhoneCtrl,
                   enabled: _editing,
                   keyboardType: TextInputType.phone,
-                  decoration: const InputDecoration(labelText: "Doctor's Phone", border: OutlineInputBorder()),
+                  decoration: const InputDecoration(
+                    labelText: "Doctor's Phone",
+                    border: OutlineInputBorder(),
+                  ),
                 ),
               ],
             ),
@@ -356,18 +412,34 @@ class _PrivateInfoScreenState extends State<PrivateInfoScreen> {
     );
   }
 
-  Widget _sectionCard({required IconData icon, required String title, required Widget child}) {
+  Widget _sectionCard({
+    required IconData icon,
+    required String title,
+    required Widget child,
+  }) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(children: [
-              Icon(icon, size: 20, color: Theme.of(context).colorScheme.primary),
-              const SizedBox(width: 8),
-              Text(title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-            ]),
+            Row(
+              children: [
+                Icon(
+                  icon,
+                  size: 20,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 15,
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 12),
             child,
           ],
@@ -378,18 +450,24 @@ class _PrivateInfoScreenState extends State<PrivateInfoScreen> {
 
   Widget _editableChips(List<String> items, String singular) {
     if (!_editing && items.isEmpty) {
-      return Text('None recorded',
-          style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant));
+      return Text(
+        'None recorded',
+        style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+      );
     }
     return Wrap(
       spacing: 8,
       runSpacing: 4,
       children: [
-        ...items.map((item) => Chip(
-              label: Text(item),
-              deleteIcon: _editing ? const Icon(Icons.close, size: 16) : null,
-              onDeleted: _editing ? () => setState(() => items.remove(item)) : null,
-            )),
+        ...items.map(
+          (item) => Chip(
+            label: Text(item),
+            deleteIcon: _editing ? const Icon(Icons.close, size: 16) : null,
+            onDeleted: _editing
+                ? () => setState(() => items.remove(item))
+                : null,
+          ),
+        ),
         if (_editing)
           ActionChip(
             avatar: const Icon(Icons.add, size: 16),
@@ -400,13 +478,20 @@ class _PrivateInfoScreenState extends State<PrivateInfoScreen> {
                 context: context,
                 builder: (ctx) => AlertDialog(
                   title: Text('Add $singular'),
-                  content: TextField(controller: ctrl, autofocus: true,
-                      decoration: InputDecoration(hintText: singular)),
+                  content: TextField(
+                    controller: ctrl,
+                    autofocus: true,
+                    decoration: InputDecoration(hintText: singular),
+                  ),
                   actions: [
-                    TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text('Cancel'),
+                    ),
                     FilledButton(
-                        onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
-                        child: const Text('Add')),
+                      onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+                      child: const Text('Add'),
+                    ),
                   ],
                 ),
               );
@@ -421,8 +506,10 @@ class _PrivateInfoScreenState extends State<PrivateInfoScreen> {
 
   Widget _medicationsList() {
     if (!_editing && _medications.isEmpty) {
-      return Text('None recorded',
-          style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant));
+      return Text(
+        'None recorded',
+        style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+      );
     }
     return Column(
       children: [
@@ -436,7 +523,8 @@ class _PrivateInfoScreenState extends State<PrivateInfoScreen> {
             trailing: _editing
                 ? IconButton(
                     icon: const Icon(Icons.delete_outline),
-                    onPressed: () => setState(() => _medications.removeAt(entry.key)),
+                    onPressed: () =>
+                        setState(() => _medications.removeAt(entry.key)),
                   )
                 : null,
           );
@@ -452,17 +540,38 @@ class _PrivateInfoScreenState extends State<PrivateInfoScreen> {
                 context: context,
                 builder: (ctx) => AlertDialog(
                   title: const Text('Add Medication'),
-                  content: Column(mainAxisSize: MainAxisSize.min, children: [
-                    TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Medication name')),
-                    const SizedBox(height: 8),
-                    TextField(controller: doseCtrl, decoration: const InputDecoration(labelText: 'Dosage / instructions')),
-                  ]),
+                  content: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextField(
+                        controller: nameCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Medication name',
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: doseCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Dosage / instructions',
+                        ),
+                      ),
+                    ],
+                  ),
                   actions: [
-                    TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text('Cancel'),
+                    ),
                     FilledButton(
                       onPressed: () {
                         if (nameCtrl.text.trim().isNotEmpty) {
-                          setState(() => _medications.add({'name': nameCtrl.text.trim(), 'dosage': doseCtrl.text.trim()}));
+                          setState(
+                            () => _medications.add({
+                              'name': nameCtrl.text.trim(),
+                              'dosage': doseCtrl.text.trim(),
+                            }),
+                          );
                         }
                         Navigator.pop(ctx);
                       },
@@ -479,8 +588,10 @@ class _PrivateInfoScreenState extends State<PrivateInfoScreen> {
 
   Widget _emergencyContactsList() {
     if (!_editing && _emergencyContacts.isEmpty) {
-      return Text('No emergency contacts',
-          style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant));
+      return Text(
+        'No emergency contacts',
+        style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+      );
     }
     return Column(
       children: [
@@ -494,7 +605,8 @@ class _PrivateInfoScreenState extends State<PrivateInfoScreen> {
             trailing: _editing
                 ? IconButton(
                     icon: const Icon(Icons.delete_outline),
-                    onPressed: () => setState(() => _emergencyContacts.removeAt(entry.key)),
+                    onPressed: () =>
+                        setState(() => _emergencyContacts.removeAt(entry.key)),
                   )
                 : null,
           );
@@ -511,24 +623,43 @@ class _PrivateInfoScreenState extends State<PrivateInfoScreen> {
                 context: context,
                 builder: (ctx) => AlertDialog(
                   title: const Text('Emergency Contact'),
-                  content: Column(mainAxisSize: MainAxisSize.min, children: [
-                    TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Name')),
-                    const SizedBox(height: 8),
-                    TextField(controller: relCtrl, decoration: const InputDecoration(labelText: 'Relationship')),
-                    const SizedBox(height: 8),
-                    TextField(controller: phoneCtrl, keyboardType: TextInputType.phone,
-                        decoration: const InputDecoration(labelText: 'Phone')),
-                  ]),
+                  content: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextField(
+                        controller: nameCtrl,
+                        decoration: const InputDecoration(labelText: 'Name'),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: relCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Relationship',
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: phoneCtrl,
+                        keyboardType: TextInputType.phone,
+                        decoration: const InputDecoration(labelText: 'Phone'),
+                      ),
+                    ],
+                  ),
                   actions: [
-                    TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text('Cancel'),
+                    ),
                     FilledButton(
                       onPressed: () {
                         if (nameCtrl.text.trim().isNotEmpty) {
-                          setState(() => _emergencyContacts.add({
-                            'name': nameCtrl.text.trim(),
-                            'relationship': relCtrl.text.trim(),
-                            'phone': phoneCtrl.text.trim(),
-                          }));
+                          setState(
+                            () => _emergencyContacts.add({
+                              'name': nameCtrl.text.trim(),
+                              'relationship': relCtrl.text.trim(),
+                              'phone': phoneCtrl.text.trim(),
+                            }),
+                          );
                         }
                         Navigator.pop(ctx);
                       },
@@ -561,8 +692,10 @@ class _NoPinPlaceholder extends StatelessWidget {
             children: [
               const Icon(Icons.lock_outline, size: 64, color: Colors.grey),
               const SizedBox(height: 16),
-              const Text('Set a PIN First',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600)),
+              const Text(
+                'Set a PIN First',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+              ),
               const SizedBox(height: 8),
               const Text(
                 'You need to set a PIN in your Profile before accessing private medical information.',

@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from backend.container import get_container
-from backend.auth.dependencies import PatientAccess, get_patient_access
+from backend.auth.dependencies import ChatAccess, get_chat_access
 
 router = APIRouter(tags=["text"])
 
@@ -18,8 +18,10 @@ class TextTurnRequest(BaseModel):
 
 
 @router.post("/text/turn")
-def text_turn(body: TextTurnRequest, access: PatientAccess = Depends(get_patient_access)) -> dict:
-    result = get_container(access.patient_id).pipeline.run_text(body.text)
+def text_turn(body: TextTurnRequest, access: ChatAccess = Depends(get_chat_access)) -> dict:
+    # Private chat is always owned by the authenticated account, never by a
+    # caregiver-selected patient. Patient-care access remains on care routes.
+    result = get_container(access.account_id, access.role).pipeline.run_text(body.text)
     return {
         "transcript": result.transcript,
         "intent": result.intent,

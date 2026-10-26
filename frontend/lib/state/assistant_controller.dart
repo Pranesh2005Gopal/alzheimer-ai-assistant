@@ -75,6 +75,7 @@ class AssistantController extends ChangeNotifier {
   bool busy = false;
   bool listening = false;
   int navIndex = 0;
+  String? selectedPatientId;
 
   // Unknown-face notification cooldown (60 s between alerts)
   DateTime? _lastUnknownFaceTime;
@@ -86,6 +87,14 @@ class AssistantController extends ChangeNotifier {
   void setSelectedLocale(String localeId) {
     _selectedLocaleId = localeId;
     _emit();
+  }
+
+  Future<void> selectCaregiverPatient(String? patientId) async {
+    selectedPatientId = patientId;
+    _api.selectPatient(patientId);
+    overview = null;
+    _emit();
+    if (patientId != null && patientId.isNotEmpty) await refreshOverview();
   }
 
   Future<void> refresh() async {

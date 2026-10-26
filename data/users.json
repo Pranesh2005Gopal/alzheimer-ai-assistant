@@ -55,7 +55,7 @@
     "id": "1bb3fa65aa7a4f17",
     "email": "caregiver@memory.care",
     "password_hash": "pbkdf2$260000$b377ba3235aeadd3c0f187e4ddf0b2de$4d8f98008934573bc07c1b518fce1f95b483ffae8c300055e921587a10178dca",
-    "pin_hash": null,
+    "pin_hash": "pbkdf2$260000$e96b435d57e221f3da6c1aa57b8c7682$1160004320885ddf25973d3e27968e0ad12f00a35e615b4b35f86e0a5e4f1108",
     "role": "caregiver",
     "profile": {
       "full_name": "Priya Pendelton",

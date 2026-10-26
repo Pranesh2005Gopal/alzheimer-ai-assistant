@@ -120,6 +120,12 @@ def create_user(
                 "daily_routine": [],
                 "important_dates": [],
                 "personal_memories": [],
+                "designation": "",
+                "specialization": "",
+                "organization": "",
+                "qualifications": "",
+                "professional_phone": "",
+                "professional_email": "",
             },
             "private": {},           # encrypted at rest
             "caregiver_permissions": {},
@@ -163,6 +169,11 @@ def update_profile(user_id: str, profile_update: dict) -> dict:
                     "full_name", "preferred_name", "avatar_url", "date_of_birth",
                     "language", "voice_preference", "hobbies", "daily_routine",
                     "important_dates", "personal_memories",
+                # These are deliberately accepted only on caregiver accounts
+                # by the API layer; keeping them here preserves one profile
+                # representation for non-PostgreSQL development installs.
+                "designation", "specialization", "organization", "qualifications",
+                "professional_phone", "professional_email",
                 }
                 cleared = set(u.get("cleared_profile_fields", []))
                 for k, v in profile_update.items():

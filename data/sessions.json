@@ -167,10 +167,82 @@
     "created_at": "2026-10-25T14:43:47+00:00",
     "last_seen": 1792939478.9230666
   },
-  "qXNgl6dM-oii3N3zEsIpqZaiQoPxEFawRFf_U7Nt3uQ": {
+  "JJA0Srixt4iQjuylnNtFSu9GwlWG1Su9y2pPdWSQdJA": {
+    "user_id": "1bb3fa65aa7a4f17",
+    "role": "caregiver",
+    "created_at": "2026-10-26T13:13:33+00:00",
+    "last_seen": 1793020460.0764933
+  },
+  "-iWi6hC-VTqBlu0f4TYe5iN90jCzClzxUa0nvDHJemA": {
+    "user_id": "1bb3fa65aa7a4f17",
+    "role": "caregiver",
+    "created_at": "2026-10-26T13:14:55+00:00",
+    "last_seen": 1793020520.2279882
+  },
+  "r2CRoWJcLHC0qfhc9hZkKd_XtMfHeJIjIXrZIRQ0Rtk": {
+    "user_id": "1bb3fa65aa7a4f17",
+    "role": "caregiver",
+    "created_at": "2026-10-26T13:15:45+00:00",
+    "last_seen": 1793021800.6069922
+  },
+  "KHPW5u3_N4nN1neb3kU4VAWWCH1Y1BXjpv-IzWBrgzY": {
+    "user_id": "1bb3fa65aa7a4f17",
+    "role": "caregiver",
+    "created_at": "2026-10-26T13:53:48+00:00",
+    "last_seen": 1793022828.2777376
+  },
+  "jQDk6xvMTtXjMk0TQLbvI_wIU4SZEeyLl8ymVpACD8A": {
+    "user_id": "1bb3fa65aa7a4f17",
+    "role": "caregiver",
+    "created_at": "2026-10-26T13:53:57+00:00",
+    "last_seen": 1793022837.7218785
+  },
+  "iUSnCaaWPLAxJ6-O9n_LB_hkMYYvV_o0J5AawsEdTCA": {
+    "user_id": "1bb3fa65aa7a4f17",
+    "role": "caregiver",
+    "created_at": "2026-10-26T14:00:00+00:00",
+    "last_seen": 1793023200.4895399
+  },
+  "tAOqG3z5tQEvBh9mFUsqbim1L6wCL-Nw6JyhKlO2GDo": {
+    "user_id": "1bb3fa65aa7a4f17",
+    "role": "caregiver",
+    "created_at": "2026-10-26T14:02:28+00:00",
+    "last_seen": 1793023348.1884892
+  },
+  "cmpjnkA1nnpogXg3-P4P70XpN9A57KjLt8zkXQNyrKg": {
+    "user_id": "1bb3fa65aa7a4f17",
+    "role": "caregiver",
+    "created_at": "2026-10-26T14:02:39+00:00",
+    "last_seen": 1793023359.5148423
+  },
+  "Tk8s6tTraGzbGfxq_-X42a2twOep9vqq9TexMzzUxi4": {
+    "user_id": "1bb3fa65aa7a4f17",
+    "role": "caregiver",
+    "created_at": "2026-10-26T14:03:47+00:00",
+    "last_seen": 1793023427.0543067
+  },
+  "TT49HiAumlUPj0CjgG6Fvof-Y5Qb3fB_4CVZNFUvmv0": {
+    "user_id": "1bb3fa65aa7a4f17",
+    "role": "caregiver",
+    "created_at": "2026-10-26T14:03:52+00:00",
+    "last_seen": 1793023432.527952
+  },
+  "D8gbz-EkOg3YYZo2WQI-cnDaurKUpCL2QMGJQKKPKOM": {
+    "user_id": "1bb3fa65aa7a4f17",
+    "role": "caregiver",
+    "created_at": "2026-10-26T14:18:04+00:00",
+    "last_seen": 1793024871.0929556
+  },
+  "yJOzkWuOIfhHY6MOCRITG200tu_YtrD6vbOmEqyTBh8": {
     "user_id": "b65f5da1a090404e",
     "role": "patient",
-    "created_at": "2026-10-25T15:13:59+00:00",
-    "last_seen": 1792941311.7295587
+    "created_at": "2026-10-26T14:32:31+00:00",
+    "last_seen": 1793025191.2066183
+  },
+  "Rb0Hf9wh_klxrtcupmmEIU_YhYiJfp8tLUsa2e4mSGo": {
+    "user_id": "b65f5da1a090404e",
+    "role": "patient",
+    "created_at": "2026-10-26T14:34:39+00:00",
+    "last_seen": 1793025356.5865965
   }
 }

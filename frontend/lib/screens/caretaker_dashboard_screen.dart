@@ -21,7 +21,8 @@ class CaretakerDashboardScreen extends StatefulWidget {
   final void Function(int index) onNavigate;
 
   @override
-  State<CaretakerDashboardScreen> createState() => _CaretakerDashboardScreenState();
+  State<CaretakerDashboardScreen> createState() =>
+      _CaretakerDashboardScreenState();
 }
 
 class _CaretakerDashboardScreenState extends State<CaretakerDashboardScreen> {
@@ -58,6 +59,12 @@ class _CaretakerDashboardScreenState extends State<CaretakerDashboardScreen> {
           _auditLogs = logs;
           _loadingCareData = false;
         });
+        final controller = AssistantScope.of(context);
+        if (patients.isNotEmpty && controller.selectedPatientId == null) {
+          await controller.selectCaregiverPatient(
+            patients.first['id'] as String?,
+          );
+        }
       }
     } catch (_) {
       if (mounted) setState(() => _loadingCareData = false);
@@ -69,7 +76,10 @@ class _CaretakerDashboardScreenState extends State<CaretakerDashboardScreen> {
     if (text.isEmpty) return;
     setState(() => _savingNote = true);
     final controller = AssistantScope.of(context);
-    final ok = await controller.api.addCareNote(note: text, category: 'observation');
+    final ok = await controller.api.addCareNote(
+      note: text,
+      category: 'observation',
+    );
     if (mounted) {
       setState(() => _savingNote = false);
       if (ok) {
@@ -121,6 +131,8 @@ class _CaretakerDashboardScreenState extends State<CaretakerDashboardScreen> {
                     _OverviewSection(
                       controller: controller,
                       assignedPatients: _assignedPatients,
+                      selectedPatientId: controller.selectedPatientId,
+                      onSelectPatient: controller.selectCaregiverPatient,
                       onNavigate: widget.onNavigate,
                       onGoToCare: () => setState(() => _activeTab = 1),
                     ),
@@ -132,7 +144,10 @@ class _CaretakerDashboardScreenState extends State<CaretakerDashboardScreen> {
                       onSubmitNote: _submitCareNote,
                     ),
                   ] else if (_activeTab == 2) ...[
-                    _PatientMonitoringSection(controller: controller, onNavigate: widget.onNavigate),
+                    _PatientMonitoringSection(
+                      controller: controller,
+                      onNavigate: widget.onNavigate,
+                    ),
                   ] else if (_activeTab == 3) ...[
                     _PatientProfileMemorySection(
                       controller: controller,
@@ -175,7 +190,9 @@ class _CaretakerHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final name = user?.profile.fullName.isNotEmpty == true
         ? user!.profile.fullName
-        : (user?.profile.preferredName.isNotEmpty == true ? user!.profile.preferredName : 'Priya Pendelton');
+        : (user?.profile.preferredName.isNotEmpty == true
+              ? user!.profile.preferredName
+              : 'Priya Pendelton');
 
     return Container(
       padding: const EdgeInsets.all(22),
@@ -198,7 +215,11 @@ class _CaretakerHeader extends StatelessWidget {
               CircleAvatar(
                 radius: 26,
                 backgroundColor: AppColors.teal,
-                child: const Icon(Icons.medical_services_outlined, color: Colors.white, size: 28),
+                child: const Icon(
+                  Icons.medical_services_outlined,
+                  color: Colors.white,
+                  size: 28,
+                ),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -210,26 +231,43 @@ class _CaretakerHeader extends StatelessWidget {
                         Flexible(
                           child: Text(
                             name,
-                            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Colors.white),
+                            style: const TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                            ),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
                         const SizedBox(width: 8),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
                             color: AppColors.teal.withValues(alpha: 0.35),
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(color: AppColors.teal),
                           ),
-                          child: const Text('CAREGIVER', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white)),
+                          child: const Text(
+                            'CAREGIVER',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                            ),
+                          ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 2),
                     Text(
                       'Clinical Care & Patient Management Dashboard',
-                      style: TextStyle(fontSize: 13, color: Colors.white.withValues(alpha: 0.8)),
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.white.withValues(alpha: 0.8),
+                      ),
                     ),
                   ],
                 ),
@@ -284,12 +322,18 @@ class _CareNavTabs extends StatelessWidget {
           return Padding(
             padding: const EdgeInsets.only(right: 8),
             child: ChoiceChip(
-              avatar: Icon(tab.$1, size: 18, color: isSelected ? Colors.white : AppColors.teal),
+              avatar: Icon(
+                tab.$1,
+                size: 18,
+                color: isSelected ? Colors.white : AppColors.teal,
+              ),
               label: Text(tab.$2),
               selected: isSelected,
               selectedColor: AppColors.teal,
               labelStyle: TextStyle(
-                color: isSelected ? Colors.white : Theme.of(context).colorScheme.onSurface,
+                color: isSelected
+                    ? Colors.white
+                    : Theme.of(context).colorScheme.onSurface,
                 fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
               ),
               onSelected: (_) => onSelectTab(idx),
@@ -309,12 +353,16 @@ class _OverviewSection extends StatelessWidget {
   const _OverviewSection({
     required this.controller,
     required this.assignedPatients,
+    required this.selectedPatientId,
+    required this.onSelectPatient,
     required this.onNavigate,
     required this.onGoToCare,
   });
 
   final AssistantController controller;
   final List<Map<String, dynamic>> assignedPatients;
+  final String? selectedPatientId;
+  final ValueChanged<String?> onSelectPatient;
   final void Function(int index) onNavigate;
   final VoidCallback onGoToCare;
 
@@ -326,14 +374,45 @@ class _OverviewSection extends StatelessWidget {
     final missed = reminders.where((r) => r.status == 'missed').length;
     final nextAppt = controller.overview?.nextAppointment;
 
-    final patientName = assignedPatients.isNotEmpty
-        ? assignedPatients[0]['name'] as String? ?? 'Arthur Pendelton'
-        : (controller.patientName.isNotEmpty ? controller.patientName : 'Arthur Pendelton');
+    final selected = assignedPatients
+        .where((p) => p['id'] == selectedPatientId)
+        .firstOrNull;
+    final patientName = selected != null
+        ? selected['name'] as String? ?? 'Patient'
+        : (controller.patientName.isNotEmpty
+              ? controller.patientName
+              : 'Arthur Pendelton');
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Assigned Patient Banner
+        // Assigned-patient selector. This response deliberately contains no
+        // medical records; those are fetched only after backend authorization.
+        if (assignedPatients.isNotEmpty) ...[
+          DropdownButtonFormField<String>(
+            value: selectedPatientId,
+            decoration: const InputDecoration(
+              labelText: 'Selected patient',
+              prefixIcon: Icon(Icons.people_outline),
+              border: OutlineInputBorder(),
+            ),
+            items: assignedPatients
+                .map(
+                  (patient) => DropdownMenuItem<String>(
+                    value: patient['id'] as String?,
+                    child: Text(patient['name'] as String? ?? 'Patient'),
+                  ),
+                )
+                .toList(),
+            onChanged: onSelectPatient,
+          ),
+          const SizedBox(height: 16),
+        ] else
+          const AppCard(
+            child: Text('No patients are currently assigned to your account.'),
+          ),
+
+        // Selected patient banner
         AppCard(
           color: Colors.blue.shade50.withValues(alpha: 0.7),
           child: Row(
@@ -343,7 +422,11 @@ class _OverviewSection extends StatelessWidget {
                 backgroundColor: AppColors.teal,
                 child: Text(
                   patientName.characters.take(1).string,
-                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: Colors.white),
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                  ),
                 ),
               ),
               const SizedBox(width: 16),
@@ -353,25 +436,46 @@ class _OverviewSection extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        Text(patientName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                        Text(
+                          patientName,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
                         const SizedBox(width: 8),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
                             color: AppColors.success.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(6),
                           ),
-                          child: const Text('ACTIVE PATIENT', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.success)),
+                          child: const Text(
+                            'ACTIVE PATIENT',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.success,
+                            ),
+                          ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 2),
-                    const Text('Diagnosis: Early-stage Alzheimer’s · Primary Care assigned', style: TextStyle(fontSize: 13, color: Colors.black87)),
+                    const Text(
+                      'Diagnosis: Early-stage Alzheimer’s · Primary Care assigned',
+                      style: TextStyle(fontSize: 13, color: Colors.black87),
+                    ),
                   ],
                 ),
               ),
               FilledButton.tonal(
-                onPressed: () => onNavigate(6),
+                onPressed: selectedPatientId == null
+                    ? null
+                    : () => onNavigate(5),
                 child: const Text('Medical Info'),
               ),
             ],
@@ -382,9 +486,17 @@ class _OverviewSection extends StatelessWidget {
         // Care Task Metric Pills
         Row(
           children: [
-            Expanded(child: _metricPill('Total Tasks', '${reminders.length}', Colors.blue)),
+            Expanded(
+              child: _metricPill(
+                'Total Tasks',
+                '${reminders.length}',
+                Colors.blue,
+              ),
+            ),
             const SizedBox(width: 10),
-            Expanded(child: _metricPill('Completed', '$completed', AppColors.success)),
+            Expanded(
+              child: _metricPill('Completed', '$completed', AppColors.success),
+            ),
             const SizedBox(width: 10),
             Expanded(child: _metricPill('Pending', '$pending', Colors.orange)),
             const SizedBox(width: 10),
@@ -409,7 +521,10 @@ class _OverviewSection extends StatelessWidget {
                 Expanded(
                   child: Text(
                     'Attention: $missed care task(s) were missed today. Please verify with patient.',
-                    style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.danger),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.danger,
+                    ),
                   ),
                 ),
                 TextButton(onPressed: onGoToCare, child: const Text('Resolve')),
@@ -430,9 +545,24 @@ class _OverviewSection extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Next Scheduled Appointment', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-                      Text('${nextAppt.doctor} on ${nextAppt.date} at ${nextAppt.time}'),
-                      if (nextAppt.location.isNotEmpty) Text('Location: ${nextAppt.location}', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                      const Text(
+                        'Next Scheduled Appointment',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 16,
+                        ),
+                      ),
+                      Text(
+                        '${nextAppt.doctor} on ${nextAppt.date} at ${nextAppt.time}',
+                      ),
+                      if (nextAppt.location.isNotEmpty)
+                        Text(
+                          'Location: ${nextAppt.location}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey,
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -451,20 +581,40 @@ class _OverviewSection extends StatelessWidget {
                 children: [
                   const Icon(Icons.history, color: AppColors.teal),
                   const SizedBox(width: 8),
-                  const Expanded(child: Text('Recent Patient Interaction Log', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16))),
-                  TextButton(onPressed: () => onNavigate(1), child: const Text('Live Assistant')),
+                  const Expanded(
+                    child: Text(
+                      'Recent Patient Interaction Log',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => onNavigate(1),
+                    child: const Text('Live Assistant'),
+                  ),
                 ],
               ),
               const SizedBox(height: 8),
               if (controller.overview?.activity.isEmpty ?? true)
-                const Text('No recent activity recorded.', style: TextStyle(color: Colors.grey))
+                const Text(
+                  'No recent activity recorded.',
+                  style: TextStyle(color: Colors.grey),
+                )
               else
-                ...controller.overview!.activity.take(4).map(
+                ...controller.overview!.activity
+                    .take(4)
+                    .map(
                       (act) => ListTile(
                         dense: true,
                         contentPadding: EdgeInsets.zero,
                         leading: const Icon(Icons.chevron_right, size: 18),
-                        title: Text(act.summary, maxLines: 2, overflow: TextOverflow.ellipsis),
+                        title: Text(
+                          act.summary,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                         subtitle: Text('${act.kind} · ${act.time}'),
                       ),
                     ),
@@ -485,9 +635,24 @@ class _OverviewSection extends StatelessWidget {
       ),
       child: Column(
         children: [
-          Text(value, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: color)),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              color: color,
+            ),
+          ),
           const SizedBox(height: 2),
-          Text(title, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color), textAlign: TextAlign.center),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: color,
+            ),
+            textAlign: TextAlign.center,
+          ),
         ],
       ),
     );
@@ -528,7 +693,9 @@ class _CareManagementSection extends StatelessWidget {
                 style: FilledButton.styleFrom(
                   backgroundColor: AppColors.teal,
                   padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
                 ),
                 onPressed: () => showAddReminderSheet(context, controller),
               ),
@@ -540,7 +707,9 @@ class _CareManagementSection extends StatelessWidget {
                 label: const Text('Schedule Clinic'),
                 style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
                 ),
                 onPressed: () => _showScheduleDialog(context, controller),
               ),
@@ -558,7 +727,10 @@ class _CareManagementSection extends StatelessWidget {
                 children: [
                   Icon(Icons.edit_note, color: AppColors.teal, size: 22),
                   SizedBox(width: 8),
-                  Text('Record Care Observation', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+                  Text(
+                    'Record Care Observation',
+                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+                  ),
                 ],
               ),
               const SizedBox(height: 8),
@@ -567,7 +739,9 @@ class _CareManagementSection extends StatelessWidget {
                 maxLines: 2,
                 decoration: InputDecoration(
                   hintText: 'e.g. Arthur ate a full lunch, mood is positive, completed exercises.',
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   filled: true,
                 ),
               ),
@@ -576,7 +750,11 @@ class _CareManagementSection extends StatelessWidget {
                 alignment: Alignment.centerRight,
                 child: FilledButton.tonalIcon(
                   icon: savingNote
-                      ? const SizedBox(height: 14, width: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                      ? const SizedBox(
+                          height: 14,
+                          width: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
                       : const Icon(Icons.save, size: 16),
                   label: const Text('Save Note'),
                   onPressed: savingNote ? null : onSubmitNote,
@@ -592,10 +770,16 @@ class _CareManagementSection extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Active Care Tasks & Medications', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17)),
+              const Text(
+                'Active Care Tasks & Medications',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
+              ),
               const SizedBox(height: 12),
               if (reminders.isEmpty)
-                const Text('No tasks recorded.', style: TextStyle(color: Colors.grey))
+                const Text(
+                  'No tasks recorded.',
+                  style: TextStyle(color: Colors.grey),
+                )
               else
                 ...reminders.map((r) {
                   final isDone = r.status == 'completed';
@@ -608,21 +792,42 @@ class _CareManagementSection extends StatelessWidget {
                     child: ListTile(
                       leading: Icon(
                         isDone ? Icons.check_circle : Icons.alarm,
-                        color: isDone ? AppColors.success : (r.kind == 'medication' ? Colors.purple : AppColors.teal),
+                        color: isDone
+                            ? AppColors.success
+                            : (r.kind == 'medication'
+                                  ? Colors.purple
+                                  : AppColors.teal),
                       ),
-                      title: Text(r.title, style: TextStyle(fontWeight: FontWeight.w600, decoration: isDone ? TextDecoration.lineThrough : null)),
-                      subtitle: Text('${r.time} · ${r.kindLabel} ${r.medicationName != null ? "(${r.medicationName})" : ""}'),
+                      title: Text(
+                        r.title,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          decoration: isDone
+                              ? TextDecoration.lineThrough
+                              : null,
+                        ),
+                      ),
+                      subtitle: Text(
+                        '${r.time} · ${r.kindLabel} ${r.medicationName != null ? "(${r.medicationName})" : ""}',
+                      ),
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           if (!isDone)
                             IconButton(
-                              icon: const Icon(Icons.check, color: AppColors.success),
+                              icon: const Icon(
+                                Icons.check,
+                                color: AppColors.success,
+                              ),
                               tooltip: 'Mark Complete',
-                              onPressed: () => controller.completeReminder(r.id),
+                              onPressed: () =>
+                                  controller.completeReminder(r.id),
                             ),
                           IconButton(
-                            icon: const Icon(Icons.delete_outline, color: AppColors.danger),
+                            icon: const Icon(
+                              Icons.delete_outline,
+                              color: AppColors.danger,
+                            ),
                             tooltip: 'Delete',
                             onPressed: () async {
                               await controller.api.deleteReminder(r.id);
@@ -641,7 +846,10 @@ class _CareManagementSection extends StatelessWidget {
     );
   }
 
-  void _showScheduleDialog(BuildContext context, AssistantController controller) {
+  void _showScheduleDialog(
+    BuildContext context,
+    AssistantController controller,
+  ) {
     final docCtrl = TextEditingController(text: 'Dr. Sarah Connor');
     final dateCtrl = TextEditingController(text: '2026-10-20');
     final timeCtrl = TextEditingController(text: '10:30 AM');
@@ -656,20 +864,40 @@ class _CareManagementSection extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextField(controller: docCtrl, decoration: const InputDecoration(labelText: 'Doctor Name')),
+              TextField(
+                controller: docCtrl,
+                decoration: const InputDecoration(labelText: 'Doctor Name'),
+              ),
               const SizedBox(height: 8),
-              TextField(controller: dateCtrl, decoration: const InputDecoration(labelText: 'Date (YYYY-MM-DD)')),
+              TextField(
+                controller: dateCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Date (YYYY-MM-DD)',
+                ),
+              ),
               const SizedBox(height: 8),
-              TextField(controller: timeCtrl, decoration: const InputDecoration(labelText: 'Time')),
+              TextField(
+                controller: timeCtrl,
+                decoration: const InputDecoration(labelText: 'Time'),
+              ),
               const SizedBox(height: 8),
-              TextField(controller: locCtrl, decoration: const InputDecoration(labelText: 'Location')),
+              TextField(
+                controller: locCtrl,
+                decoration: const InputDecoration(labelText: 'Location'),
+              ),
               const SizedBox(height: 8),
-              TextField(controller: purpCtrl, decoration: const InputDecoration(labelText: 'Purpose')),
+              TextField(
+                controller: purpCtrl,
+                decoration: const InputDecoration(labelText: 'Purpose'),
+              ),
             ],
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
             onPressed: () async {
               await controller.api.createAppointment(
@@ -681,7 +909,9 @@ class _CareManagementSection extends StatelessWidget {
               );
               if (ctx.mounted) {
                 Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Appointment scheduled.')));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Appointment scheduled.')),
+                );
                 controller.refresh();
               }
             },
@@ -698,7 +928,10 @@ class _CareManagementSection extends StatelessWidget {
 // ---------------------------------------------------------------------------
 
 class _PatientMonitoringSection extends StatelessWidget {
-  const _PatientMonitoringSection({required this.controller, required this.onNavigate});
+  const _PatientMonitoringSection({
+    required this.controller,
+    required this.onNavigate,
+  });
 
   final AssistantController controller;
   final void Function(int index) onNavigate;
@@ -710,19 +943,26 @@ class _PatientMonitoringSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Camera & Face Recognition Events
+        // Care monitoring events. Vision remains patient-only.
         AppCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
-                  const Icon(Icons.face_retouching_natural, color: AppColors.teal),
+                  const Icon(
+                    Icons.face_retouching_natural,
+                    color: AppColors.teal,
+                  ),
                   const SizedBox(width: 8),
-                  const Expanded(child: Text('Vision & Face Recognition Events', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16))),
-                  FilledButton.tonal(
-                    onPressed: () => onNavigate(4),
-                    child: const Text('Open Camera'),
+                  const Expanded(
+                    child: Text(
+                      'Care monitoring events',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 16,
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -749,7 +989,10 @@ class _PatientMonitoringSection extends StatelessWidget {
                   ),
                 )
               else
-                const Text('No recent camera events. Face recognizer is active.', style: TextStyle(color: Colors.grey)),
+                const Text(
+                  'No recent monitoring events.',
+                  style: TextStyle(color: Colors.grey),
+                ),
             ],
           ),
         ),
@@ -760,10 +1003,16 @@ class _PatientMonitoringSection extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Patient Activity & Interaction Timeline', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+              const Text(
+                'Patient Activity & Interaction Timeline',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+              ),
               const SizedBox(height: 12),
               if (activity.isEmpty)
-                const Text('No activity events logged.', style: TextStyle(color: Colors.grey))
+                const Text(
+                  'No activity events logged.',
+                  style: TextStyle(color: Colors.grey),
+                )
               else
                 ...activity.map((item) => ActivityTile(item: item)),
             ],
@@ -779,7 +1028,10 @@ class _PatientMonitoringSection extends StatelessWidget {
 // ---------------------------------------------------------------------------
 
 class _PatientProfileMemorySection extends StatelessWidget {
-  const _PatientProfileMemorySection({required this.controller, required this.onNavigate});
+  const _PatientProfileMemorySection({
+    required this.controller,
+    required this.onNavigate,
+  });
 
   final AssistantController controller;
   final void Function(int index) onNavigate;
@@ -804,14 +1056,22 @@ class _PatientProfileMemorySection extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Passcode-Protected Medical Records', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-                    Text('View verified medical conditions, medications, and allergies.'),
+                    Text(
+                      'Passcode-Protected Medical Records',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 16,
+                      ),
+                    ),
+                    Text(
+                      'View verified medical conditions, medications, and allergies.',
+                    ),
                   ],
                 ),
               ),
               FilledButton(
                 style: FilledButton.styleFrom(backgroundColor: AppColors.teal),
-                onPressed: () => onNavigate(6),
+                onPressed: () => onNavigate(5),
                 child: const Text('Unlock with PIN'),
               ),
             ],
@@ -824,18 +1084,28 @@ class _PatientProfileMemorySection extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Familiar People & Contacts', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+              const Text(
+                'Familiar People & Contacts',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+              ),
               const SizedBox(height: 10),
               if (family.isEmpty)
-                const Text('None recorded.', style: TextStyle(color: Colors.grey))
+                const Text(
+                  'None recorded.',
+                  style: TextStyle(color: Colors.grey),
+                )
               else
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
-                  children: family.map((p) => Chip(
-                    avatar: const Icon(Icons.person, size: 16),
-                    label: Text('${p.name} (${p.relationship})'),
-                  )).toList(),
+                  children: family
+                      .map(
+                        (p) => Chip(
+                          avatar: const Icon(Icons.person, size: 16),
+                          label: Text('${p.name} (${p.relationship})'),
+                        ),
+                      )
+                      .toList(),
                 ),
             ],
           ),
@@ -847,17 +1117,25 @@ class _PatientProfileMemorySection extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Important Dates & Anniversaries', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+              const Text(
+                'Important Dates & Anniversaries',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+              ),
               const SizedBox(height: 10),
               if (dates.isEmpty)
-                const Text('None recorded.', style: TextStyle(color: Colors.grey))
+                const Text(
+                  'None recorded.',
+                  style: TextStyle(color: Colors.grey),
+                )
               else
-                ...dates.map((d) => ListTile(
-                  dense: true,
-                  leading: const Icon(Icons.event, color: AppColors.teal),
-                  title: Text(d.title),
-                  subtitle: Text('${d.date} · ${d.kind}'),
-                )),
+                ...dates.map(
+                  (d) => ListTile(
+                    dense: true,
+                    leading: const Icon(Icons.event, color: AppColors.teal),
+                    title: Text(d.title),
+                    subtitle: Text('${d.date} · ${d.kind}'),
+                  ),
+                ),
             ],
           ),
         ),
@@ -868,17 +1146,23 @@ class _PatientProfileMemorySection extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Authorized Patient Preferences', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+              const Text(
+                'Authorized Patient Preferences',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+              ),
               const SizedBox(height: 10),
               if (prefs.isEmpty)
-                const Text('None recorded.', style: TextStyle(color: Colors.grey))
+                const Text(
+                  'None recorded.',
+                  style: TextStyle(color: Colors.grey),
+                )
               else
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
-                  children: prefs.map((pr) => Chip(
-                    label: Text('${pr.key}: ${pr.value}'),
-                  )).toList(),
+                  children: prefs
+                      .map((pr) => Chip(label: Text('${pr.key}: ${pr.value}')))
+                      .toList(),
                 ),
             ],
           ),
@@ -920,19 +1204,26 @@ class _SettingsAuditSectionState extends State<_SettingsAuditSection> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Caregiver Alert Preferences', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17)),
+              const Text(
+                'Caregiver Alert Preferences',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
+              ),
               const SizedBox(height: 10),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Reminder Notifications'),
-                subtitle: const Text('Receive alerts when scheduled care tasks are due'),
+                subtitle: const Text(
+                  'Receive alerts when scheduled care tasks are due',
+                ),
                 value: _notifyReminders,
                 onChanged: (val) => setState(() => _notifyReminders = val),
               ),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Missed Medication Alerts'),
-                subtitle: const Text('Immediate alert when patient misses a medication time'),
+                subtitle: const Text(
+                  'Immediate alert when patient misses a medication time',
+                ),
                 value: _notifyMissedDose,
                 onChanged: (val) => setState(() => _notifyMissedDose = val),
               ),
@@ -957,21 +1248,41 @@ class _SettingsAuditSectionState extends State<_SettingsAuditSection> {
                 children: [
                   const Icon(Icons.security, color: AppColors.teal),
                   const SizedBox(width: 8),
-                  const Expanded(child: Text('Access Audit History', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17))),
-                  IconButton(icon: const Icon(Icons.refresh), onPressed: widget.onRefreshLogs),
+                  const Expanded(
+                    child: Text(
+                      'Access Audit History',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 17,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.refresh),
+                    onPressed: widget.onRefreshLogs,
+                  ),
                 ],
               ),
               const SizedBox(height: 10),
               if (widget.auditLogs.isEmpty)
-                const Text('No audit events logged yet.', style: TextStyle(color: Colors.grey))
+                const Text(
+                  'No audit events logged yet.',
+                  style: TextStyle(color: Colors.grey),
+                )
               else
                 ...widget.auditLogs.take(8).map((log) {
                   return ListTile(
                     dense: true,
                     contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.verified_user_outlined, color: AppColors.teal, size: 20),
+                    leading: const Icon(
+                      Icons.verified_user_outlined,
+                      color: AppColors.teal,
+                      size: 20,
+                    ),
                     title: Text('${log["action"]} · Target: ${log["target"]}'),
-                    subtitle: Text('${log["timestamp"]} · ${log["details"] ?? ""}'),
+                    subtitle: Text(
+                      '${log["timestamp"]} · ${log["details"] ?? ""}',
+                    ),
                   );
                 }),
             ],
@@ -997,19 +1308,26 @@ class _CaregiverPopupMenu extends StatelessWidget {
       icon: const Icon(Icons.more_vert, color: Colors.white),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       onSelected: (val) async {
-        if (val == 'profile') onNavigate(5);
-        if (val == 'settings') onNavigate(7);
+        if (val == 'profile') onNavigate(4);
+        if (val == 'settings') onNavigate(6);
         if (val == 'logout') {
           final confirm = await showDialog<bool>(
             context: context,
             builder: (ctx) => AlertDialog(
               title: const Text('Sign Out'),
-              content: const Text('Are you sure you want to sign out from Caregiver session?'),
+              content: const Text(
+                'Are you sure you want to sign out from Caregiver session?',
+              ),
               actions: [
-                TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Cancel'),
+                ),
                 FilledButton(
                   onPressed: () => Navigator.pop(ctx, true),
-                  style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.danger,
+                  ),
                   child: const Text('Sign Out'),
                 ),
               ],
@@ -1023,16 +1341,34 @@ class _CaregiverPopupMenu extends StatelessWidget {
       itemBuilder: (ctx) => [
         const PopupMenuItem(
           value: 'profile',
-          child: Row(children: [Icon(Icons.person_outline), SizedBox(width: 8), Text('Caregiver Profile')]),
+          child: Row(
+            children: [
+              Icon(Icons.person_outline),
+              SizedBox(width: 8),
+              Text('Caregiver Profile'),
+            ],
+          ),
         ),
         const PopupMenuItem(
           value: 'settings',
-          child: Row(children: [Icon(Icons.settings_outlined), SizedBox(width: 8), Text('Settings')]),
+          child: Row(
+            children: [
+              Icon(Icons.settings_outlined),
+              SizedBox(width: 8),
+              Text('Settings'),
+            ],
+          ),
         ),
         const PopupMenuDivider(),
         const PopupMenuItem(
           value: 'logout',
-          child: Row(children: [Icon(Icons.logout, color: AppColors.danger), SizedBox(width: 8), Text('Sign Out', style: TextStyle(color: AppColors.danger))]),
+          child: Row(
+            children: [
+              Icon(Icons.logout, color: AppColors.danger),
+              SizedBox(width: 8),
+              Text('Sign Out', style: TextStyle(color: AppColors.danger)),
+            ],
+          ),
         ),
       ],
     );

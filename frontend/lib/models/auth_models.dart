@@ -33,7 +33,9 @@ class AuthUser {
       id: json['id'] as String? ?? '',
       email: json['email'] as String? ?? '',
       role: json['role'] as String? ?? 'patient',
-      profile: UserProfile.fromJson(json['profile'] as Map<String, dynamic>? ?? {}),
+      profile: UserProfile.fromJson(
+        json['profile'] as Map<String, dynamic>? ?? {},
+      ),
       hasPin: json['has_pin'] as bool? ?? false,
       caregiverPermissions: perms.map(
         (k, v) => MapEntry(k, (v as List).cast<String>()),
@@ -58,6 +60,12 @@ class UserProfile {
     this.dailyRoutine = const [],
     this.importantDates = const [],
     this.personalMemories = const [],
+    this.designation = '',
+    this.specialization = '',
+    this.organization = '',
+    this.qualifications = '',
+    this.professionalPhone = '',
+    this.professionalEmail = '',
   });
 
   final String fullName;
@@ -70,6 +78,12 @@ class UserProfile {
   final List<String> dailyRoutine;
   final List<Map<String, dynamic>> importantDates;
   final List<String> personalMemories;
+  final String designation;
+  final String specialization;
+  final String organization;
+  final String qualifications;
+  final String professionalPhone;
+  final String professionalEmail;
 
   factory UserProfile.fromJson(Map<String, dynamic> json) {
     List<String> asList(dynamic v) {
@@ -79,7 +93,10 @@ class UserProfile {
 
     List<Map<String, dynamic>> asMaps(dynamic v) {
       if (v is List) {
-        return v.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+        return v
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
       }
       return [];
     }
@@ -95,21 +112,33 @@ class UserProfile {
       dailyRoutine: asList(json['daily_routine']),
       importantDates: asMaps(json['important_dates']),
       personalMemories: asList(json['personal_memories']),
+      designation: json['designation'] as String? ?? '',
+      specialization: json['specialization'] as String? ?? '',
+      organization: json['organization'] as String? ?? '',
+      qualifications: json['qualifications'] as String? ?? '',
+      professionalPhone: json['professional_phone'] as String? ?? '',
+      professionalEmail: json['professional_email'] as String? ?? '',
     );
   }
 
   Map<String, dynamic> toJson() => {
-        'full_name': fullName,
-        'preferred_name': preferredName,
-        'avatar_url': avatarUrl,
-        'date_of_birth': dateOfBirth,
-        'language': language,
-        'voice_preference': voicePreference,
-        'hobbies': hobbies,
-        'daily_routine': dailyRoutine,
-        'important_dates': importantDates,
-        'personal_memories': personalMemories,
-      };
+    'full_name': fullName,
+    'preferred_name': preferredName,
+    'avatar_url': avatarUrl,
+    'date_of_birth': dateOfBirth,
+    'language': language,
+    'voice_preference': voicePreference,
+    'hobbies': hobbies,
+    'daily_routine': dailyRoutine,
+    'important_dates': importantDates,
+    'personal_memories': personalMemories,
+    'designation': designation,
+    'specialization': specialization,
+    'organization': organization,
+    'qualifications': qualifications,
+    'professional_phone': professionalPhone,
+    'professional_email': professionalEmail,
+  };
 
   UserProfile copyWith({
     String? fullName,
@@ -122,19 +151,30 @@ class UserProfile {
     List<String>? dailyRoutine,
     List<Map<String, dynamic>>? importantDates,
     List<String>? personalMemories,
-  }) =>
-      UserProfile(
-        fullName: fullName ?? this.fullName,
-        preferredName: preferredName ?? this.preferredName,
-        avatarUrl: avatarUrl ?? this.avatarUrl,
-        dateOfBirth: dateOfBirth ?? this.dateOfBirth,
-        language: language ?? this.language,
-        voicePreference: voicePreference ?? this.voicePreference,
-        hobbies: hobbies ?? this.hobbies,
-        dailyRoutine: dailyRoutine ?? this.dailyRoutine,
-        importantDates: importantDates ?? this.importantDates,
-        personalMemories: personalMemories ?? this.personalMemories,
-      );
+    String? designation,
+    String? specialization,
+    String? organization,
+    String? qualifications,
+    String? professionalPhone,
+    String? professionalEmail,
+  }) => UserProfile(
+    fullName: fullName ?? this.fullName,
+    preferredName: preferredName ?? this.preferredName,
+    avatarUrl: avatarUrl ?? this.avatarUrl,
+    dateOfBirth: dateOfBirth ?? this.dateOfBirth,
+    language: language ?? this.language,
+    voicePreference: voicePreference ?? this.voicePreference,
+    hobbies: hobbies ?? this.hobbies,
+    dailyRoutine: dailyRoutine ?? this.dailyRoutine,
+    importantDates: importantDates ?? this.importantDates,
+    personalMemories: personalMemories ?? this.personalMemories,
+    designation: designation ?? this.designation,
+    specialization: specialization ?? this.specialization,
+    organization: organization ?? this.organization,
+    qualifications: qualifications ?? this.qualifications,
+    professionalPhone: professionalPhone ?? this.professionalPhone,
+    professionalEmail: professionalEmail ?? this.professionalEmail,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -168,7 +208,10 @@ class PrivateInfo {
 
     List<Map<String, dynamic>> asMaps(dynamic v) {
       if (v is List) {
-        return v.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+        return v
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
       }
       return [];
     }
@@ -190,12 +233,12 @@ class PrivateInfo {
   }
 
   Map<String, dynamic> toJson() => {
-        'medical_conditions': medicalConditions,
-        'allergies': allergies,
-        'medications': medications,
-        'emergency_contacts': emergencyContacts,
-        'doctor_details': doctorDetails,
-        'address': address,
-        'caregiver_info': caregiverInfo,
-      };
+    'medical_conditions': medicalConditions,
+    'allergies': allergies,
+    'medications': medications,
+    'emergency_contacts': emergencyContacts,
+    'doctor_details': doctorDetails,
+    'address': address,
+    'caregiver_info': caregiverInfo,
+  };
 }

@@ -22,30 +22,85 @@ import 'voice_screen.dart';
 List<_NavDest> _getDestinations(bool isCaregiver) {
   if (isCaregiver) {
     return const [
-      _NavDest(icon: Icons.dashboard_outlined, activeIcon: Icons.dashboard, label: 'Care Home'),
+      _NavDest(
+        icon: Icons.dashboard_outlined,
+        activeIcon: Icons.dashboard,
+        label: 'Care Home',
+      ),
       _NavDest(icon: Icons.mic_none, activeIcon: Icons.mic, label: 'Assistant'),
-      _NavDest(icon: Icons.checklist_rtl_outlined, activeIcon: Icons.checklist_rtl, label: 'Tasks'),
-      _NavDest(icon: Icons.auto_stories_outlined, activeIcon: Icons.auto_stories, label: 'Memory'),
-      _NavDest(icon: Icons.face_outlined, activeIcon: Icons.face, label: 'Vision'),
-      _NavDest(icon: Icons.person_outline, activeIcon: Icons.person, label: 'Profile'),
-      _NavDest(icon: Icons.health_and_safety_outlined, activeIcon: Icons.health_and_safety, label: 'Medical'),
-      _NavDest(icon: Icons.settings_outlined, activeIcon: Icons.settings, label: 'Settings'),
+      _NavDest(
+        icon: Icons.checklist_rtl_outlined,
+        activeIcon: Icons.checklist_rtl,
+        label: 'Tasks',
+      ),
+      _NavDest(
+        icon: Icons.auto_stories_outlined,
+        activeIcon: Icons.auto_stories,
+        label: 'Memory',
+      ),
+      _NavDest(
+        icon: Icons.person_outline,
+        activeIcon: Icons.person,
+        label: 'Profile',
+      ),
+      _NavDest(
+        icon: Icons.health_and_safety_outlined,
+        activeIcon: Icons.health_and_safety,
+        label: 'Medical',
+      ),
+      _NavDest(
+        icon: Icons.settings_outlined,
+        activeIcon: Icons.settings,
+        label: 'Settings',
+      ),
     ];
   }
   return const [
     _NavDest(icon: Icons.home_outlined, activeIcon: Icons.home, label: 'Home'),
     _NavDest(icon: Icons.mic_none, activeIcon: Icons.mic, label: 'Talk'),
-    _NavDest(icon: Icons.alarm_outlined, activeIcon: Icons.alarm, label: 'Reminders'),
-    _NavDest(icon: Icons.auto_stories_outlined, activeIcon: Icons.auto_stories, label: 'Memories'),
+    _NavDest(
+      icon: Icons.alarm_outlined,
+      activeIcon: Icons.alarm,
+      label: 'Reminders',
+    ),
+    _NavDest(
+      icon: Icons.auto_stories_outlined,
+      activeIcon: Icons.auto_stories,
+      label: 'Memories',
+    ),
     _NavDest(icon: Icons.face_outlined, activeIcon: Icons.face, label: 'Faces'),
-    _NavDest(icon: Icons.person_outline, activeIcon: Icons.person, label: 'Profile'),
-    _NavDest(icon: Icons.health_and_safety_outlined, activeIcon: Icons.health_and_safety, label: 'Private'),
-    _NavDest(icon: Icons.settings_outlined, activeIcon: Icons.settings, label: 'Settings'),
+    _NavDest(
+      icon: Icons.person_outline,
+      activeIcon: Icons.person,
+      label: 'Profile',
+    ),
+    _NavDest(
+      icon: Icons.health_and_safety_outlined,
+      activeIcon: Icons.health_and_safety,
+      label: 'Private',
+    ),
+    _NavDest(
+      icon: Icons.settings_outlined,
+      activeIcon: Icons.settings,
+      label: 'Settings',
+    ),
   ];
 }
 
+/// Kept separate from the widget tree so role-specific navigation can be
+/// verified without rendering a dashboard. Caregivers must never receive a
+/// Vision destination; patients retain it.
+List<String> navigationLabelsForRole({required bool isCaregiver}) =>
+    _getDestinations(isCaregiver)
+        .map((destination) => destination.label)
+        .toList(growable: false);
+
 class _NavDest {
-  const _NavDest({required this.icon, required this.activeIcon, required this.label});
+  const _NavDest({
+    required this.icon,
+    required this.activeIcon,
+    required this.label,
+  });
 
   final IconData icon;
   final IconData activeIcon;
@@ -96,15 +151,36 @@ class AppShell extends StatelessWidget {
     );
   }
 
-  static Widget _buildPage(BuildContext context, int index, AssistantController controller) {
+  static Widget _buildPage(
+    BuildContext context,
+    int index,
+    AssistantController controller,
+  ) {
     final auth = AuthScope.of(context);
     final isCaregiver = auth.user?.role == 'caregiver';
 
+    if (isCaregiver) {
+      switch (index) {
+        case 0:
+          return CaretakerDashboardScreen(onNavigate: controller.selectNav);
+        case 1:
+          return const VoiceScreen();
+        case 2:
+          return const RemindersScreen();
+        case 3:
+          return const MemoryScreen();
+        case 4:
+          return const ProfileScreen();
+        case 5:
+          return const PrivateInfoScreen();
+        case 6:
+          return const SettingsScreen();
+        default:
+          return CaretakerDashboardScreen(onNavigate: controller.selectNav);
+      }
+    }
     switch (index) {
       case 0:
-        if (isCaregiver) {
-          return CaretakerDashboardScreen(onNavigate: controller.selectNav);
-        }
         return PatientDashboardScreen(onNavigate: controller.selectNav);
       case 1:
         return const VoiceScreen();
@@ -134,10 +210,7 @@ class AppShell extends StatelessWidget {
 // ---------------------------------------------------------------------------
 
 class _CompactShell extends StatelessWidget {
-  const _CompactShell({
-    required this.controller,
-    required this.destinations,
-  });
+  const _CompactShell({required this.controller, required this.destinations});
 
   final AssistantController controller;
   final List<_NavDest> destinations;
@@ -295,7 +368,13 @@ class _RailLogo extends StatelessWidget {
           ? Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(isCaregiver ? Icons.healing_rounded : Icons.local_hospital_rounded, color: color, size: 26),
+                Icon(
+                  isCaregiver
+                      ? Icons.healing_rounded
+                      : Icons.local_hospital_rounded,
+                  color: color,
+                  size: 26,
+                ),
                 const SizedBox(width: 8),
                 Text(
                   title,
@@ -307,7 +386,13 @@ class _RailLogo extends StatelessWidget {
                 ),
               ],
             )
-          : Icon(isCaregiver ? Icons.healing_rounded : Icons.local_hospital_rounded, color: color, size: 26),
+          : Icon(
+              isCaregiver
+                  ? Icons.healing_rounded
+                  : Icons.local_hospital_rounded,
+              color: color,
+              size: 26,
+            ),
     );
   }
 }
@@ -329,7 +414,14 @@ class _RailStatus extends StatelessWidget {
         children: [
           Icon(Icons.circle, size: 10, color: color),
           const SizedBox(width: 6),
-          Text(label, style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 13)),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
+            ),
+          ),
         ],
       ),
     );

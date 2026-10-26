@@ -21,6 +21,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
   late TextEditingController _fullNameCtrl;
   late TextEditingController _preferredNameCtrl;
   late TextEditingController _dobCtrl;
+  late TextEditingController _designationCtrl;
+  late TextEditingController _specializationCtrl;
+  late TextEditingController _organizationCtrl;
+  late TextEditingController _qualificationsCtrl;
+  late TextEditingController _professionalPhoneCtrl;
+  late TextEditingController _professionalEmailCtrl;
   String _language = 'en';
   String _voice = 'female';
   List<String> _hobbies = [];
@@ -32,8 +38,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String? _error;
 
   static const _languages = [
-    ('en', 'English'), ('es', 'Spanish'), ('fr', 'French'),
-    ('de', 'German'), ('hi', 'Hindi'), ('ta', 'Tamil'), ('te', 'Telugu'),
+    ('en', 'English'),
+    ('es', 'Spanish'),
+    ('fr', 'French'),
+    ('de', 'German'),
+    ('hi', 'Hindi'),
+    ('ta', 'Tamil'),
+    ('te', 'Telugu'),
   ];
 
   @override
@@ -42,6 +53,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _fullNameCtrl = TextEditingController();
     _preferredNameCtrl = TextEditingController();
     _dobCtrl = TextEditingController();
+    _designationCtrl = TextEditingController();
+    _specializationCtrl = TextEditingController();
+    _organizationCtrl = TextEditingController();
+    _qualificationsCtrl = TextEditingController();
+    _professionalPhoneCtrl = TextEditingController();
+    _professionalEmailCtrl = TextEditingController();
   }
 
   @override
@@ -58,6 +75,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _hobbies = List<String>.from(p.hobbies);
       _routine = List<String>.from(p.dailyRoutine);
       _memories = List<String>.from(p.personalMemories);
+      _designationCtrl.text = p.designation;
+      _specializationCtrl.text = p.specialization;
+      _organizationCtrl.text = p.organization;
+      _qualificationsCtrl.text = p.qualifications;
+      _professionalPhoneCtrl.text = p.professionalPhone;
+      _professionalEmailCtrl.text = p.professionalEmail;
     }
   }
 
@@ -66,12 +89,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _fullNameCtrl.dispose();
     _preferredNameCtrl.dispose();
     _dobCtrl.dispose();
+    _designationCtrl.dispose();
+    _specializationCtrl.dispose();
+    _organizationCtrl.dispose();
+    _qualificationsCtrl.dispose();
+    _professionalPhoneCtrl.dispose();
+    _professionalEmailCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
-    setState(() { _saving = true; _error = null; });
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
     final auth = AuthScope.of(context);
     final ok = await auth.updateProfile({
       'full_name': _fullNameCtrl.text.trim(),
@@ -82,13 +114,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
       'hobbies': _hobbies,
       'daily_routine': _routine,
       'personal_memories': _memories,
+      if (auth.user?.isCaregiver == true) ...{
+        'designation': _designationCtrl.text.trim(),
+        'specialization': _specializationCtrl.text.trim(),
+        'organization': _organizationCtrl.text.trim(),
+        'qualifications': _qualificationsCtrl.text.trim(),
+        'professional_phone': _professionalPhoneCtrl.text.trim(),
+        'professional_email': _professionalEmailCtrl.text.trim(),
+      },
     });
     if (mounted) {
-      setState(() { _saving = false; _editing = !ok; _error = ok ? null : auth.error; });
+      setState(() {
+        _saving = false;
+        _editing = !ok;
+        _error = ok ? null : auth.error;
+      });
       if (ok) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Profile saved.')),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Profile saved.')));
       }
     }
   }
@@ -109,7 +152,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
           decoration: InputDecoration(hintText: label),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
             child: const Text('Add'),
@@ -135,7 +181,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
               (h) => Chip(
                 label: Text(h),
                 deleteIcon: _editing ? const Icon(Icons.close, size: 16) : null,
-                onDeleted: _editing ? () => setState(() => items.remove(h)) : null,
+                onDeleted: _editing
+                    ? () => setState(() => items.remove(h))
+                    : null,
               ),
             ),
             if (_editing)
@@ -152,10 +200,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _sectionLabel(String text) => Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: Text(text,
-            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-      );
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Text(
+      text,
+      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -175,7 +225,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           if (_editing) ...[
             TextButton(
-              onPressed: _saving ? null : () => setState(() => _editing = false),
+              onPressed: _saving
+                  ? null
+                  : () => setState(() => _editing = false),
               child: const Text('Cancel'),
             ),
             Padding(
@@ -184,8 +236,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 onPressed: _saving ? null : _save,
                 child: _saving
                     ? const SizedBox(
-                        height: 16, width: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        height: 16,
+                        width: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
                     : const Text('Save'),
               ),
             ),
@@ -207,7 +264,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     color: AppColors.danger.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Text(_error!, style: const TextStyle(color: AppColors.danger)),
+                  child: Text(
+                    _error!,
+                    style: const TextStyle(color: AppColors.danger),
+                  ),
                 ),
 
               // Avatar row
@@ -216,7 +276,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   children: [
                     CircleAvatar(
                       radius: 48,
-                      backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                      backgroundColor: Theme.of(context)
+                          .colorScheme
+                          .primaryContainer,
                       child: Text(
                         (user.profile.preferredName.isNotEmpty
                                 ? user.profile.preferredName
@@ -228,24 +290,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         style: TextStyle(
                           fontSize: 32,
                           fontWeight: FontWeight.w700,
-                          color: Theme.of(context).colorScheme.onPrimaryContainer,
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onPrimaryContainer,
                         ),
                       ),
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      user.profile.fullName.isNotEmpty ? user.profile.fullName : 'Your Name',
-                      style: Theme.of(context)
-                          .textTheme
-                          .titleLarge
+                      user.profile.fullName.isNotEmpty
+                          ? user.profile.fullName
+                          : 'Your Name',
+                      style: Theme.of(context).textTheme.titleLarge
                           ?.copyWith(fontWeight: FontWeight.w700),
                     ),
                     Text(
                       user.email,
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodySmall
-                          ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Chip(
@@ -273,8 +336,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           prefixIcon: Icon(Icons.person_outline),
                           border: OutlineInputBorder(),
                         ),
-                        validator: (v) =>
-                            (v == null || v.trim().isEmpty) ? 'Name required' : null,
+                        validator: (v) => (v == null || v.trim().isEmpty)
+                            ? 'Name required'
+                            : null,
                       ),
                       const SizedBox(height: 12),
                       TextFormField(
@@ -303,6 +367,51 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               const SizedBox(height: 16),
 
+              if (user.isCaregiver) ...[
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _sectionLabel('Professional Information'),
+                        _profileField(
+                          _designationCtrl,
+                          'Designation',
+                          Icons.badge_outlined,
+                        ),
+                        _profileField(
+                          _specializationCtrl,
+                          'Specialization',
+                          Icons.psychology_outlined,
+                        ),
+                        _profileField(
+                          _organizationCtrl,
+                          'Organization / Workplace',
+                          Icons.business_outlined,
+                        ),
+                        _profileField(
+                          _qualificationsCtrl,
+                          'Qualifications',
+                          Icons.school_outlined,
+                        ),
+                        _profileField(
+                          _professionalPhoneCtrl,
+                          'Professional Phone',
+                          Icons.phone_outlined,
+                        ),
+                        _profileField(
+                          _professionalEmailCtrl,
+                          'Professional Email',
+                          Icons.alternate_email,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
+
               // Preferences card
               Card(
                 child: Padding(
@@ -319,9 +428,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           border: OutlineInputBorder(),
                         ),
                         items: _languages
-                            .map((l) => DropdownMenuItem(value: l.$1, child: Text(l.$2)))
+                            .map(
+                              (l) => DropdownMenuItem(
+                                value: l.$1,
+                                child: Text(l.$2),
+                              ),
+                            )
                             .toList(),
-                        onChanged: _editing ? (v) => setState(() => _language = v ?? 'en') : null,
+                        onChanged: _editing
+                            ? (v) => setState(() => _language = v ?? 'en')
+                            : null,
                       ),
                       const SizedBox(height: 12),
                       DropdownButtonFormField<String>(
@@ -332,10 +448,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           border: OutlineInputBorder(),
                         ),
                         items: const [
-                          DropdownMenuItem(value: 'female', child: Text('Female')),
+                          DropdownMenuItem(
+                            value: 'female',
+                            child: Text('Female'),
+                          ),
                           DropdownMenuItem(value: 'male', child: Text('Male')),
                         ],
-                        onChanged: _editing ? (v) => setState(() => _voice = v ?? 'female') : null,
+                        onChanged: _editing
+                            ? (v) => setState(() => _voice = v ?? 'female')
+                            : null,
                       ),
                     ],
                   ),
@@ -370,7 +491,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ListTile(
                         contentPadding: EdgeInsets.zero,
                         leading: const Icon(Icons.pin_outlined),
-                        title: Text(user.hasPin ? 'Change PIN' : 'Set Private PIN'),
+                        title: Text(
+                          user.hasPin ? 'Change PIN' : 'Set Private PIN',
+                        ),
                         subtitle: Text(
                           user.hasPin
                               ? 'A PIN protects your medical & private info'
@@ -406,6 +529,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  Widget _profileField(
+    TextEditingController controller,
+    String label,
+    IconData icon,
+  ) => Padding(
+    padding: const EdgeInsets.only(bottom: 12),
+    child: TextFormField(
+      controller: controller,
+      enabled: _editing,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon),
+        border: const OutlineInputBorder(),
+      ),
+    ),
+  );
+
   // ---------------------------------------------------------------------------
   // Dialogs
   // ---------------------------------------------------------------------------
@@ -420,11 +560,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('This PIN protects your medical and private information.'),
+            const Text(
+              'This PIN protects your medical and private information.',
+            ),
             const SizedBox(height: 16),
             TextField(
               controller: pinCtrl,
-              decoration: const InputDecoration(labelText: 'PIN (4–6 digits)', border: OutlineInputBorder()),
+              decoration: const InputDecoration(
+                labelText: 'PIN (4–6 digits)',
+                border: OutlineInputBorder(),
+              ),
               keyboardType: TextInputType.number,
               obscureText: true,
               maxLength: 6,
@@ -432,7 +577,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const SizedBox(height: 12),
             TextField(
               controller: confirmCtrl,
-              decoration: const InputDecoration(labelText: 'Confirm PIN', border: OutlineInputBorder()),
+              decoration: const InputDecoration(
+                labelText: 'Confirm PIN',
+                border: OutlineInputBorder(),
+              ),
               keyboardType: TextInputType.number,
               obscureText: true,
               maxLength: 6,
@@ -440,7 +588,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
             onPressed: () async {
               if (pinCtrl.text != confirmCtrl.text) {
@@ -454,7 +605,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
               if (ctx.mounted) {
                 Navigator.pop(ctx);
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(ok ? 'PIN set successfully.' : auth.error ?? 'Error')),
+                  SnackBar(
+                    content: Text(
+                      ok ? 'PIN set successfully.' : auth.error ?? 'Error',
+                    ),
+                  ),
                 );
               }
             },
@@ -477,19 +632,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
           children: [
             TextField(
               controller: oldCtrl,
-              decoration: const InputDecoration(labelText: 'Current Password', border: OutlineInputBorder()),
+              decoration: const InputDecoration(
+                labelText: 'Current Password',
+                border: OutlineInputBorder(),
+              ),
               obscureText: true,
             ),
             const SizedBox(height: 12),
             TextField(
               controller: newCtrl,
-              decoration: const InputDecoration(labelText: 'New Password (min 8 chars)', border: OutlineInputBorder()),
+              decoration: const InputDecoration(
+                labelText: 'New Password (min 8 chars)',
+                border: OutlineInputBorder(),
+              ),
               obscureText: true,
             ),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
             onPressed: () async {
               final auth = AuthScope.of(context);
@@ -497,7 +661,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
               if (ctx.mounted) {
                 Navigator.pop(ctx);
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(ok ? 'Password changed.' : auth.error ?? 'Error')),
+                  SnackBar(
+                    content: Text(
+                      ok ? 'Password changed.' : auth.error ?? 'Error',
+                    ),
+                  ),
                 );
               }
             },
@@ -515,7 +683,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
         title: const Text('Sign Out'),
         content: const Text('Are you sure you want to sign out?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: FilledButton.styleFrom(backgroundColor: AppColors.danger),

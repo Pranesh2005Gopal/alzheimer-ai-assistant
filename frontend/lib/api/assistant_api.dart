@@ -45,6 +45,20 @@ class AssistantApi {
   String baseUrl;
   final String? Function()? _tokenProvider;
   final http.Client _client;
+  String? _selectedPatientId;
+
+  /// Caregiver requests carry an explicit patient scope. The backend verifies
+  /// the assignment; patients leave this unset and remain scoped to themselves.
+  void selectPatient(String? patientId) => _selectedPatientId = patientId;
+
+  Uri _careUri(String path) {
+    final uri = Uri.parse('$baseUrl$path');
+    final patientId = _selectedPatientId;
+    if (patientId == null || patientId.isEmpty) return uri;
+    return uri.replace(
+      queryParameters: {...uri.queryParameters, 'patient_id': patientId},
+    );
+  }
 
   bool get hasAccessToken =>
       (_tokenProvider?.call()?.trim().isNotEmpty ?? false);
@@ -99,10 +113,7 @@ class AssistantApi {
 
   Future<OverviewData> overview() async {
     final response = await _client
-        .get(
-          Uri.parse('$baseUrl/v1/patient/overview'),
-          headers: _protectedHeaders(),
-        )
+        .get(_careUri('/v1/patient/overview'), headers: _protectedHeaders())
         .timeout(const Duration(seconds: 20));
     if (response.statusCode != 200) {
       throw HttpException('Overview failed (${response.statusCode})');
@@ -315,7 +326,7 @@ class AssistantApi {
 
   Future<List<ReminderItem>> listReminders() async {
     final response = await http.get(
-      Uri.parse('$baseUrl/v1/reminders'),
+      _careUri('/v1/reminders'),
       headers: _protectedHeaders(),
     );
     return _mapList(response, 'Reminders', 'reminders', ReminderItem.fromJson);
@@ -330,7 +341,7 @@ class AssistantApi {
     String notes = '',
   }) async {
     final response = await http.post(
-      Uri.parse('$baseUrl/v1/reminders'),
+      _careUri('/v1/reminders'),
       headers: _protectedHeaders(json: true),
       body: jsonEncode({
         'title': title,
@@ -352,7 +363,7 @@ class AssistantApi {
 
   Future<ReminderItem> completeReminder(String id) async {
     final response = await http.post(
-      Uri.parse('$baseUrl/v1/reminders/$id/complete'),
+      _careUri('/v1/reminders/$id/complete'),
       headers: _protectedHeaders(),
     );
     if (response.statusCode != 200) {
@@ -366,7 +377,7 @@ class AssistantApi {
 
   Future<bool> deleteReminder(String id) async {
     final response = await http.delete(
-      Uri.parse('$baseUrl/v1/reminders/$id'),
+      _careUri('/v1/reminders/$id'),
       headers: _protectedHeaders(),
     );
     return response.statusCode == 200;
@@ -374,7 +385,7 @@ class AssistantApi {
 
   Future<List<AppointmentItem>> listAppointments() async {
     final response = await http.get(
-      Uri.parse('$baseUrl/v1/appointments'),
+      _careUri('/v1/appointments'),
       headers: _protectedHeaders(),
     );
     return _mapList(
@@ -393,7 +404,7 @@ class AssistantApi {
     String purpose = '',
   }) async {
     final response = await http.post(
-      Uri.parse('$baseUrl/v1/appointments'),
+      _careUri('/v1/appointments'),
       headers: _protectedHeaders(json: true),
       body: jsonEncode({
         'doctor': doctor,
@@ -419,7 +430,7 @@ class AssistantApi {
     String category = 'observation',
   }) async {
     final response = await http.post(
-      Uri.parse('$baseUrl/v1/care/notes'),
+      _careUri('/v1/care/notes'),
       headers: _protectedHeaders(json: true),
       body: jsonEncode({'note': note, 'category': category}),
     );
@@ -428,7 +439,7 @@ class AssistantApi {
 
   Future<Map<String, dynamic>> memory() async {
     final response = await http.get(
-      Uri.parse('$baseUrl/v1/memory'),
+      _careUri('/v1/memory'),
       headers: _protectedHeaders(),
     );
     if (response.statusCode != 200) {
@@ -439,7 +450,7 @@ class AssistantApi {
 
   Future<String> addMemoryNote(String text) async {
     final response = await http.post(
-      Uri.parse('$baseUrl/v1/memory/notes'),
+      _careUri('/v1/memory/notes'),
       headers: _protectedHeaders(json: true),
       body: jsonEncode({'text': text}),
     );

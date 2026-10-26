@@ -23,7 +23,7 @@ from utils.config import Settings, get_settings
 
 
 class AppContainer:
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, *, account_role: str = "patient") -> None:
         self.settings = settings
         if settings.database_url:
             self.repos = PostgresRepositoryBundle(
@@ -35,7 +35,7 @@ class AppContainer:
                 pool_timeout=settings.database_pool_timeout,
                 pool_recycle=settings.database_pool_recycle,
             )
-            self.history = PostgresConversationHistory(self.repos.factory, settings.database_patient_id, settings.conversation_history_limit)
+            self.history = PostgresConversationHistory(self.repos.factory, settings.database_patient_id, settings.conversation_history_limit, account_role)
         else:
             patient_id = settings.database_patient_id
             # Local JSON persistence follows the same patient boundary as the
@@ -72,8 +72,8 @@ class AppContainer:
 
 
 @lru_cache(maxsize=32)
-def get_container(patient_id: str | None = None) -> AppContainer:
+def get_container(patient_id: str | None = None, account_role: str = "patient") -> AppContainer:
     settings = get_settings()
     if patient_id:
         settings = settings.model_copy(update={"database_patient_id": patient_id})
-    return AppContainer(settings)
+    return AppContainer(settings, account_role=account_role)

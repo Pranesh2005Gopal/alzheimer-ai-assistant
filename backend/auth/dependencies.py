@@ -57,6 +57,24 @@ class PatientAccess:
     user: dict
 
 
+@dataclass(frozen=True)
+class ChatAccess:
+    """Authenticated owner of a private assistant conversation.
+
+    This deliberately never accepts a client-provided owner or selected
+    patient id. Care workflows use ``PatientAccess`` separately.
+    """
+    account_id: str
+    role: str
+    user: dict
+
+
+def get_chat_access(user: dict = Depends(get_current_user)) -> ChatAccess:
+    if user["role"] not in ("patient", "caregiver", "admin"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Unsupported account role")
+    return ChatAccess(account_id=user["id"], role=user["role"], user=user)
+
+
 def get_patient_access(
     patient_id: str | None = Query(default=None),
     user: dict = Depends(get_current_user),
