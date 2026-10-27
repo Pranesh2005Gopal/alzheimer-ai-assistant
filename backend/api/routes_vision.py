@@ -53,6 +53,26 @@ async def recognize_face(image: UploadFile = File(...)) -> dict:
     return _recognize(data)
 
 
+@router.post("/vision/validate")
+async def validate_face(image: UploadFile = File(...)) -> dict:
+    """Validate a gallery image without running identity matching or TTS."""
+    data = await image.read()
+    if not data or len(data) < 100:
+        raise HTTPException(status_code=400, detail="The provided image was empty or too small.")
+    image_bgr = _decode_image_for_validation(data)
+    if image_bgr is None:
+        return {"usable": False, "quality_feedback": "Could not decode the selected image.", "landmarks": {}}
+    validation = get_container().recognizer.validate_image(image_bgr, require_guide=False)
+    height, width = image_bgr.shape[:2]
+    return {
+        "usable": not bool(validation.feedback),
+        "quality_feedback": validation.feedback,
+        "landmarks": validation.landmarks,
+        "image_width": width,
+        "image_height": height,
+    }
+
+
 @router.post("/vision/recognize-camera")
 def recognize_from_pc_camera() -> dict:
     """Capture the PC webcam on the backend machine, then identify the face."""
@@ -233,6 +253,10 @@ def _recognize(data: bytes) -> dict:
             "score": result.score,
             "message": "",
             "audio_wav_base64": "",
+            "landmarks": result.landmarks or {},
+            "quality_feedback": result.quality_feedback,
+            "image_width": result.image_width,
+            "image_height": result.image_height,
         }
     if result.message.startswith("I cannot see") or result.message.startswith("I could not read"):
         message = result.message
@@ -253,7 +277,16 @@ def _recognize(data: bytes) -> dict:
         "score": result.score,
         "message": message,
         "audio_wav_base64": base64.b64encode(audio).decode("ascii"),
+        "landmarks": result.landmarks or {},
+        "quality_feedback": result.quality_feedback,
+        "image_width": result.image_width,
+        "image_height": result.image_height,
     }
+
+
+def _decode_image_for_validation(data: bytes):
+    array = np.frombuffer(data, np.uint8)
+    return cv2.imdecode(array, cv2.IMREAD_COLOR)
 
 
 def _resolve_person(name: str, relationship: str, notes: str, person_id: str) -> Person:

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -9,7 +8,6 @@ import '../api/assistant_api.dart';
 import '../state/assistant_controller.dart';
 import '../vision/camera_live_preview.dart';
 import '../vision/face_capture.dart';
-import '../vision/pc_camera.dart';
 import '../widgets/app_widgets.dart';
 
 // =============================================================================
@@ -426,9 +424,13 @@ class _UnknownPersonBanner extends StatelessWidget {
 enum _ScanPhase { idle, scanning, matching, done, failed }
 
 class _LiveScanDialog extends StatefulWidget {
-  const _LiveScanDialog({required this.controller});
+  const _LiveScanDialog({
+    required this.controller,
+    this.captureForRegistration = false,
+  });
 
   final AssistantController controller;
+  final bool captureForRegistration;
 
   @override
   State<_LiveScanDialog> createState() => _LiveScanDialogState();
@@ -438,15 +440,18 @@ class _LiveScanDialogState extends State<_LiveScanDialog> {
   _ScanPhase _phase = _ScanPhase.idle;
   String _statusMessage = 'Position the face in the oval and tap Scan.';
   FaceRecognitionResult? _result;
+  FaceRecognitionResult? _frameValidation;
+  Uint8List? _bestPhoto;
   String? _errorMessage;
   bool _cancelled = false;
+  bool _guidanceInvalid = false;
 
   // Adaptive multi-frame scanning state
   final List<Uint8List> _samples = [];
   Timer? _captureTimer;
   int _elapsed = 0; // seconds since scan started
   static const _maxScanSeconds = 15;
-  static const _targetSamples = 5;
+  static const _targetSamples = 3;
 
   // Key to access CaptureHelper from the live preview widget
   final GlobalKey<_LivePreviewWithCaptureState> _previewKey =
@@ -470,6 +475,8 @@ class _LiveScanDialogState extends State<_LiveScanDialog> {
       _elapsed = 0;
       _errorMessage = null;
       _result = null;
+      _frameValidation = null;
+      _guidanceInvalid = false;
     });
 
     // Capture a frame every 2 seconds; stop after _targetSamples or _maxScanSeconds
@@ -485,14 +492,31 @@ class _LiveScanDialogState extends State<_LiveScanDialog> {
         return;
       }
 
-      setState(() => _statusMessage =
-          'Collecting samples… (${_samples.length}/$_targetSamples)');
+      setState(() => _statusMessage = 'Checking face position…');
 
       final jpeg = await _previewKey.currentState?.capture();
       if (jpeg != null && jpeg.isNotEmpty) {
-        _samples.add(jpeg);
-        setState(() => _statusMessage =
-            'Sample ${_samples.length}/$_targetSamples captured – hold still…');
+        try {
+          final check = await widget.controller.api.validateFacePhoto(jpeg.toList());
+          if (!mounted || _cancelled) return;
+          setState(() => _frameValidation = check);
+          if (!check.hasUsableFace) {
+            setState(() {
+              _guidanceInvalid = true;
+              _statusMessage = check.qualityFeedback;
+            });
+            return;
+          }
+          _samples.add(jpeg);
+          setState(() {
+            _guidanceInvalid = false;
+            _statusMessage = _samples.length >= _targetSamples
+                ? 'Face aligned. Capturing…'
+                : 'Hold still – ${_samples.length}/$_targetSamples good frames.';
+          });
+        } catch (_) {
+          if (mounted) setState(() => _statusMessage = 'Looking for a clear face…');
+        }
       }
     });
   }
@@ -514,15 +538,19 @@ class _LiveScanDialogState extends State<_LiveScanDialog> {
     });
 
     try {
-      // Send all samples; use best-confidence result
+      // Every frame was validated before it reached this point. Match those
+      // exact bytes; never substitute a gallery image or recapture elsewhere.
       FaceRecognitionResult? best;
-      for (final jpeg in _samples) {
+      for (var index = 0; index < _samples.length; index++) {
         if (_cancelled || !mounted) break;
         try {
-          final r =
-              await widget.controller.api.recognizeFace(jpeg.toList());
-          if (best == null || r.score > best.score) best = r;
-          if (best.recognized && best.score >= 0.85) break; // early exit
+          final r = await widget.controller.api.recognizeFace(_samples[index].toList());
+          if (!r.hasUsableFace) continue;
+          if (best == null || r.score > best.score) {
+            best = r;
+            _bestPhoto = _samples[index];
+          }
+          if (r.recognized && r.score >= 0.85) break;
         } catch (_) {
           continue;
         }
@@ -536,8 +564,13 @@ class _LiveScanDialogState extends State<_LiveScanDialog> {
         setState(() {
           _phase = _ScanPhase.done;
           _result = best;
-          _statusMessage =
-              best!.recognized ? 'Identified!' : 'No match found.';
+          _statusMessage = best!.qualityFeedback.isNotEmpty
+              ? best.qualityFeedback
+              : best.recognized
+                  ? 'Identified!'
+                  : best.hasUsableFace
+                      ? 'No match found.'
+                      : best.message;
         });
       }
     } catch (e) {
@@ -558,6 +591,8 @@ class _LiveScanDialogState extends State<_LiveScanDialog> {
       _samples.clear();
       _elapsed = 0;
       _result = null;
+      _frameValidation = null;
+      _bestPhoto = null;
       _errorMessage = null;
     });
   }
@@ -591,6 +626,12 @@ class _LiveScanDialogState extends State<_LiveScanDialog> {
                   key: _previewKey,
                   apiBase: widget.controller.apiBase,
                   phase: _phase,
+                  landmarks: (_result ?? _frameValidation)?.landmarks,
+                  imageSize: (_result ?? _frameValidation) == null
+                      ? null
+                      : Size((_result ?? _frameValidation)!.imageWidth.toDouble(),
+                          (_result ?? _frameValidation)!.imageHeight.toDouble()),
+                  guidanceInvalid: _guidanceInvalid,
                 ),
               ),
 
@@ -659,6 +700,29 @@ class _LiveScanDialogState extends State<_LiveScanDialog> {
                       onScan: _startScan,
                       onReset: _reset,
                       onDone: () => Navigator.of(context).pop(),
+                      onUsePhoto: widget.captureForRegistration &&
+                              _result != null &&
+                              _bestPhoto != null &&
+                              _result!.hasUsableFace
+                          ? () => Navigator.of(context).pop(_bestPhoto)
+                          : null,
+                      onRegisterUnknown: !widget.captureForRegistration &&
+                              _result != null &&
+                              !_result!.recognized &&
+                              _bestPhoto != null
+                          ? () {
+                              Navigator.of(context).pop();
+                              showDialog<void>(
+                                context: context,
+                                builder: (_) => _AddPersonDialog(
+                                  controller: widget.controller,
+                                  startWithCamera: true,
+                                  prefillBytes: _bestPhoto!.toList(),
+                                  existingPersonId: null,
+                                ),
+                              );
+                            }
+                          : null,
                     ),
                   ],
                 ),
@@ -680,10 +744,16 @@ class _LivePreviewWithCapture extends StatefulWidget {
     super.key,
     required this.apiBase,
     required this.phase,
+    this.landmarks,
+    this.imageSize,
+    required this.guidanceInvalid,
   });
 
   final String apiBase;
   final _ScanPhase phase;
+  final Map<String, List<Offset>>? landmarks;
+  final Size? imageSize;
+  final bool guidanceInvalid;
 
   @override
   State<_LivePreviewWithCapture> createState() =>
@@ -692,16 +762,22 @@ class _LivePreviewWithCapture extends StatefulWidget {
 
 class _LivePreviewWithCaptureState extends State<_LivePreviewWithCapture> {
   Uint8List? _lastFrame;
+  Future<Uint8List?> Function()? _captureCurrent;
 
   /// Called by the parent scan dialog to grab a JPEG frame for recognition.
-  Future<Uint8List?> capture() async => _lastFrame;
+  Future<Uint8List?> capture() async =>
+      _captureCurrent == null ? _lastFrame : _captureCurrent!();
 
   @override
   Widget build(BuildContext context) {
     final ovalColor = switch (widget.phase) {
       _ScanPhase.done => Colors.green,
       _ScanPhase.failed => Colors.red,
-      _ScanPhase.scanning => Theme.of(context).colorScheme.primary,
+      _ScanPhase.scanning => widget.guidanceInvalid
+          ? Colors.red
+          : _lastFrame == null
+              ? Colors.white54
+              : Colors.green,
       _ScanPhase.matching => Colors.orange,
       _ScanPhase.idle => Colors.white54,
     };
@@ -709,9 +785,14 @@ class _LivePreviewWithCaptureState extends State<_LivePreviewWithCapture> {
     return CameraLivePreview(
       apiBase: widget.apiBase,
       onFrameAvailable: (jpeg) => _lastFrame = jpeg,
+      onCaptureReady: (capture) => _captureCurrent = capture,
       overlayWidget: IgnorePointer(
         child: CustomPaint(
-          painter: _OvalGuidePainter(color: ovalColor),
+          painter: _OvalGuidePainter(
+            color: ovalColor,
+            landmarks: widget.landmarks,
+            imageSize: widget.imageSize,
+          ),
           child: const SizedBox.expand(),
         ),
       ),
@@ -724,9 +805,11 @@ class _LivePreviewWithCaptureState extends State<_LivePreviewWithCapture> {
 // ---------------------------------------------------------------------------
 
 class _OvalGuidePainter extends CustomPainter {
-  const _OvalGuidePainter({required this.color});
+  const _OvalGuidePainter({required this.color, this.landmarks, this.imageSize});
 
   final Color color;
+  final Map<String, List<Offset>>? landmarks;
+  final Size? imageSize;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -752,6 +835,43 @@ class _OvalGuidePainter extends CustomPainter {
       ..strokeWidth = 3;
     canvas.drawOval(ovalRect, borderPaint);
 
+    // Map normalized camera coordinates through the same BoxFit.cover crop as
+    // the preview, rather than stretching them to the widget bounds.
+    final source = imageSize;
+    final scale = source == null || source.isEmpty
+        ? 1.0
+        : (size.width / source.width > size.height / source.height
+            ? size.width / source.width
+            : size.height / source.height);
+    final drawn = source == null || source.isEmpty
+        ? size
+        : Size(source.width * scale, source.height * scale);
+    final origin = Offset((size.width - drawn.width) / 2, (size.height - drawn.height) / 2);
+    for (final points in landmarks?.values ?? const <List<Offset>>[]) {
+      final paint = Paint()..color = color..strokeWidth = 1.5;
+      for (final point in points) {
+        canvas.drawCircle(origin + Offset(point.dx * drawn.width, point.dy * drawn.height), 2, paint);
+      }
+    }
+    for (final entry in {
+      'left_eye': landmarks?['left_eye'],
+      'right_eye': landmarks?['right_eye'],
+    }.entries) {
+      final points = entry.value;
+      if (points == null || points.isEmpty) continue;
+      final center = Offset(
+        points.map((p) => p.dx).reduce((a, b) => a + b) / points.length,
+        points.map((p) => p.dy).reduce((a, b) => a + b) / points.length,
+      );
+      final location = origin + Offset(center.dx * drawn.width, center.dy * drawn.height);
+      canvas.drawCircle(location, 8, Paint()..color = Colors.cyanAccent..style = PaintingStyle.stroke..strokeWidth = 2);
+      final label = TextPainter(
+        text: TextSpan(text: entry.key == 'left_eye' ? 'L' : 'R', style: const TextStyle(color: Colors.cyanAccent, fontSize: 11)),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      label.paint(canvas, location - Offset(label.width / 2, label.height / 2));
+    }
+
     // Corner label
     final textPainter = TextPainter(
       text: TextSpan(
@@ -767,7 +887,8 @@ class _OvalGuidePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_OvalGuidePainter old) => old.color != color;
+  bool shouldRepaint(_OvalGuidePainter old) =>
+      old.color != color || old.landmarks != landmarks || old.imageSize != imageSize;
 }
 
 // ---------------------------------------------------------------------------
@@ -837,6 +958,8 @@ class _ScanActions extends StatelessWidget {
     required this.onScan,
     required this.onReset,
     required this.onDone,
+    required this.onUsePhoto,
+    required this.onRegisterUnknown,
   });
 
   final _ScanPhase phase;
@@ -845,6 +968,8 @@ class _ScanActions extends StatelessWidget {
   final VoidCallback onScan;
   final VoidCallback onReset;
   final VoidCallback onDone;
+  final VoidCallback? onUsePhoto;
+  final VoidCallback? onRegisterUnknown;
 
   @override
   Widget build(BuildContext context) {
@@ -860,20 +985,15 @@ class _ScanActions extends StatelessWidget {
         children: [
           if (!result!.recognized)
             FilledButton.icon(
-              onPressed: () {
-                Navigator.of(context).pop();
-                showDialog<void>(
-                  context: context,
-                  builder: (_) => _AddPersonDialog(
-                    controller: controller,
-                    startWithCamera: false,
-                    prefillBytes: null,
-                    existingPersonId: null,
-                  ),
-                );
-              },
+              onPressed: onRegisterUnknown,
               icon: const Icon(Icons.person_add_outlined),
-              label: const Text('Register Person'),
+              label: const Text('Register captured photo'),
+            ),
+          if (onUsePhoto != null)
+            FilledButton.icon(
+              onPressed: onUsePhoto,
+              icon: const Icon(Icons.check),
+              label: const Text('Use this photo'),
             ),
           OutlinedButton.icon(
             style: OutlinedButton.styleFrom(foregroundColor: Colors.white),
@@ -927,15 +1047,15 @@ class _AddPersonDialogState extends State<_AddPersonDialog>
   final _relCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
   final _picker = ImagePicker();
-  final _pc = PcCamera();
-
   List<int>? _photoBytes;
   bool _saving = false;
   String? _error;
   String? _successMessage;
 
-  bool get _isDesktop =>
-      !kIsWeb && (Platform.isLinux || Platform.isMacOS || Platform.isWindows);
+  bool get _isDesktop => !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.linux ||
+          defaultTargetPlatform == TargetPlatform.macOS ||
+          defaultTargetPlatform == TargetPlatform.windows);
 
   @override
   void initState() {
@@ -964,7 +1084,21 @@ class _AddPersonDialogState extends State<_AddPersonDialog>
         maxWidth: 1280,
       );
       if (picked == null) return;
-      final bytes = await File(picked.path).readAsBytes();
+      // XFile is intentionally used directly: on web it has no native path.
+      final bytes = await picked.readAsBytes();
+      if (bytes.length < 100) {
+        throw StateError('That file is not a valid image.');
+      }
+      final validation =
+          await widget.controller.api.validateFacePhoto(bytes.toList());
+      if (!validation.hasUsableFace) {
+        if (!mounted) return;
+        setState(() => _error = validation.qualityFeedback.isEmpty
+            ? 'This photo does not contain a usable face.'
+            : validation.qualityFeedback);
+        return;
+      }
+      if (!mounted) return;
       setState(() {
         _photoBytes = bytes;
         _error = null;
@@ -976,26 +1110,18 @@ class _AddPersonDialogState extends State<_AddPersonDialog>
 
   Future<void> _captureFromCamera() async {
     try {
-      if (_isDesktop) {
-        final file = await _pc.captureJpeg();
-        final bytes = await file.readAsBytes();
-        setState(() {
-          _photoBytes = bytes;
-          _error = null;
-        });
-      } else {
-        final picked = await _picker.pickImage(
-          source: ImageSource.camera,
-          imageQuality: 85,
-          maxWidth: 1280,
-        );
-        if (picked == null) return;
-        final bytes = await File(picked.path).readAsBytes();
-        setState(() {
-          _photoBytes = bytes;
-          _error = null;
-        });
-      }
+      final captured = await showDialog<Uint8List>(
+        context: context,
+        builder: (_) => _LiveScanDialog(
+          controller: widget.controller,
+          captureForRegistration: true,
+        ),
+      );
+      if (captured == null || captured.length < 100 || !mounted) return;
+      setState(() {
+        _photoBytes = captured;
+        _error = null;
+      });
     } catch (e) {
       setState(() => _error = 'Camera error: $e');
     }

@@ -9,7 +9,6 @@
 library;
 
 import 'dart:async';
-import 'dart:io';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
@@ -30,6 +29,7 @@ class CameraLivePreview extends StatefulWidget {
     super.key,
     required this.apiBase,
     this.onFrameAvailable,
+    this.onCaptureReady,
     this.overlayWidget,
   });
 
@@ -39,6 +39,10 @@ class CameraLivePreview extends StatefulWidget {
   /// Optional callback that receives the current JPEG frame bytes.
   /// Called roughly every 100 ms on desktop, on each new frame on mobile.
   final void Function(Uint8List jpeg)? onFrameAvailable;
+
+  /// Receives a capture function once the active camera is ready.  This avoids
+  /// opening a second controller and works with browser camera streams.
+  final ValueChanged<Future<Uint8List?> Function()>? onCaptureReady;
 
   /// Optional widget rendered on top of the camera feed (oval guide, etc.).
   final Widget? overlayWidget;
@@ -52,8 +56,9 @@ class CameraLivePreview extends StatefulWidget {
 // ---------------------------------------------------------------------------
 
 class _CameraLivePreviewState extends State<CameraLivePreview> {
-  bool get _isMobile =>
-      !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+  bool get _usesCameraPlugin => kIsWeb || (!kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS));
 
   // Mobile-specific
   CameraController? _camCtrl;
@@ -70,7 +75,7 @@ class _CameraLivePreviewState extends State<CameraLivePreview> {
   @override
   void initState() {
     super.initState();
-    if (_isMobile) {
+    if (_usesCameraPlugin) {
       _initMobile();
     } else {
       _initDesktop();
@@ -114,6 +119,7 @@ class _CameraLivePreviewState extends State<CameraLivePreview> {
         _camCtrl = ctrl;
         _mobileReady = true;
       });
+      widget.onCaptureReady?.call(_captureJpeg);
     } catch (e) {
       if (mounted) setState(() => _mobileError = 'Camera error: $e');
     }
@@ -147,9 +153,25 @@ class _CameraLivePreviewState extends State<CameraLivePreview> {
         },
         cancelOnError: true,
       );
+      widget.onCaptureReady?.call(_captureJpeg);
     } catch (_) {
       if (mounted) setState(() => _desktopError = true);
     }
+  }
+
+  Future<Uint8List?> _captureJpeg() async {
+    if (_usesCameraPlugin) {
+      final ctrl = _camCtrl;
+      if (ctrl == null || !ctrl.value.isInitialized || ctrl.value.isTakingPicture) {
+        return null;
+      }
+      try {
+        return await (await ctrl.takePicture()).readAsBytes();
+      } catch (_) {
+        return null;
+      }
+    }
+    return _desktopFrame;
   }
 
   /// Scans [_buf] for JPEG SOI (0xFF 0xD8) … EOI (0xFF 0xD9) markers and
@@ -185,7 +207,7 @@ class _CameraLivePreviewState extends State<CameraLivePreview> {
   Widget build(BuildContext context) {
     Widget content;
 
-    if (_isMobile) {
+    if (_usesCameraPlugin) {
       if (_mobileError != null) {
         content = _ErrorPlaceholder(message: _mobileError!);
       } else if (!_mobileReady || _camCtrl == null) {

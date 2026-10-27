@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -170,6 +171,17 @@ class AssistantApi {
       'Face recognition',
       FaceRecognitionResult.fromJson,
     );
+  }
+
+  Future<FaceRecognitionResult> validateFacePhoto(List<int> imageBytes) async {
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('$baseUrl/v1/vision/validate'),
+    );
+    request.files.add(
+      http.MultipartFile.fromBytes('image', imageBytes, filename: 'face.jpg'),
+    );
+    return _sendMultipart(request, 'Face photo validation', FaceRecognitionResult.fromJson);
   }
 
   Future<FaceRecognitionResult> recognizeFromCamera() async {
@@ -564,6 +576,11 @@ class FaceRecognitionResult {
     required this.score,
     required this.message,
     required this.audioBytes,
+    required this.landmarks,
+    required this.qualityFeedback,
+    required this.imageWidth,
+    required this.imageHeight,
+    required this.usable,
   });
 
   final bool recognized;
@@ -573,10 +590,18 @@ class FaceRecognitionResult {
   final double score;
   final String message;
   final Uint8List audioBytes;
+  final Map<String, List<Offset>> landmarks;
+  final String qualityFeedback;
+  final int imageWidth;
+  final int imageHeight;
+  final bool? usable;
+
+  bool get hasUsableFace => usable ?? qualityFeedback.isEmpty;
 
   factory FaceRecognitionResult.fromJson(Map<String, dynamic> json) {
     final encoded = json['audio_wav_base64'] as String? ?? '';
     final person = json['person'] as Map<String, dynamic>?;
+    final rawLandmarks = json['landmarks'] as Map<String, dynamic>? ?? const {};
     return FaceRecognitionResult(
       recognized: json['recognized'] as bool? ?? json['status'] == 'registered',
       personName: person?['name'] as String? ?? 'Unknown',
@@ -585,6 +610,21 @@ class FaceRecognitionResult {
       score: (json['score'] as num?)?.toDouble() ?? 0.0,
       message: json['message'] as String? ?? '',
       audioBytes: encoded.isEmpty ? Uint8List(0) : base64Decode(encoded),
+      landmarks: rawLandmarks.map((name, rawPoints) => MapEntry(
+            name,
+            (rawPoints as List<dynamic>)
+                .whereType<List<dynamic>>()
+                .where((point) => point.length >= 2)
+                .map((point) => Offset(
+                      (point[0] as num).toDouble(),
+                      (point[1] as num).toDouble(),
+                    ))
+                .toList(),
+          )),
+      qualityFeedback: json['quality_feedback'] as String? ?? '',
+      imageWidth: json['image_width'] as int? ?? 0,
+      imageHeight: json['image_height'] as int? ?? 0,
+      usable: json['usable'] as bool?,
     );
   }
 }
